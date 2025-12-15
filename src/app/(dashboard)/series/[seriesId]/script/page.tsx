@@ -331,9 +331,9 @@ export default function ScriptPage() {
   );
 
   const configPanel = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-        <FormControl sx={{ minWidth: 150 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+        <FormControl size="small" sx={{ minWidth: 120 }}>
           <InputLabel>Duration</InputLabel>
           <Select
             value={duration}
@@ -348,36 +348,31 @@ export default function ScriptPage() {
           </Select>
         </FormControl>
 
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel>Narrative Tone</InputLabel>
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <InputLabel>Tone</InputLabel>
           <Select
             value={tone}
-            label="Narrative Tone"
+            label="Tone"
             onChange={(e) => setTone(e.target.value as NarrativeTone)}
           >
             {tones.map((t) => (
               <MenuItem key={t.value} value={t.value}>
-                <Box>
-                  <Typography>{t.label}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {t.description}
-                  </Typography>
-                </Box>
+                {t.label}
               </MenuItem>
             ))}
           </Select>
         </FormControl>
+
+        <TextField
+          placeholder="Additional instructions..."
+          value={additionalPrompt}
+          onChange={(e) => setAdditionalPrompt(e.target.value)}
+          size="small"
+          sx={{ flex: 1, minWidth: 150 }}
+        />
       </Box>
 
-      <TextField
-        fullWidth
-        placeholder="Additional instructions (optional)..."
-        value={additionalPrompt}
-        onChange={(e) => setAdditionalPrompt(e.target.value)}
-        size="small"
-      />
-
-      <Box sx={{ display: 'flex', gap: 2 }}>
+      <Box sx={{ display: 'flex', gap: 1 }}>
         <Button
           variant="contained"
           startIcon={isGenerating ? <CircularProgress size={16} /> : <AutoAwesome />}
