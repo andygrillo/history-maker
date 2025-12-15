@@ -246,15 +246,20 @@ export default function ScriptPage() {
       </Tabs>
 
       {inputMode === 'write' && (
-        <TextField
-          fullWidth
-          multiline
-          rows={8}
-          placeholder="Paste or type your source material here..."
-          value={sourceText}
-          onChange={(e) => setSourceText(e.target.value)}
-          variant="outlined"
-        />
+        <Box>
+          <TextField
+            fullWidth
+            multiline
+            rows={8}
+            placeholder="Paste or type your source material here..."
+            value={sourceText}
+            onChange={(e) => setSourceText(e.target.value)}
+            variant="outlined"
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', textAlign: 'right' }}>
+            {sourceText.trim() ? sourceText.trim().split(/\s+/).length.toLocaleString() : 0} words
+          </Typography>
+        </Box>
       )}
 
       {inputMode === 'import' && (
