@@ -1,0 +1,259 @@
+interface BedrockConfig {
+  region?: string;
+  apiKey: string;
+}
+
+interface BedrockClient {
+  region: string;
+  apiKey: string;
+}
+
+export function createBedrockClient(config: BedrockConfig): BedrockClient {
+  return {
+    region: config.region || 'us-east-1',
+    apiKey: config.apiKey,
+  };
+}
+
+interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface InvokeClaudeOptions {
+  client: BedrockClient;
+  model?: 'sonnet' | 'opus' | 'haiku';
+  messages: ConversationMessage[];
+  system?: string;
+  maxTokens?: number;
+  temperature?: number;
+}
+
+// Model IDs for Claude on Bedrock (cross-region inference profiles)
+const CLAUDE_MODELS = {
+  sonnet: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+  opus: 'us.anthropic.claude-opus-4-5-20251101-v1:0',
+  haiku: 'us.anthropic.claude-haiku-4-5-20251001-v1:0',
+} as const;
+
+export async function invokeClaudeModel({
+  client,
+  model = 'sonnet',
+  messages,
+  system,
+  maxTokens = 4096,
+  temperature = 0.7,
+}: InvokeClaudeOptions): Promise<string> {
+  const modelId = CLAUDE_MODELS[model];
+  const endpoint = `https://bedrock-runtime.${client.region}.amazonaws.com/model/${encodeURIComponent(modelId)}/invoke`;
+
+  const payload = {
+    anthropic_version: 'bedrock-2023-05-31',
+    max_tokens: maxTokens,
+    temperature,
+    system,
+    messages: messages.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    })),
+  };
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${client.apiKey}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Bedrock API error (${response.status}): ${errorText}`);
+  }
+
+  const responseBody = await response.json();
+  return responseBody.content[0].text;
+}
+
+// Convenience functions for specific use cases
+
+export async function generateContentCalendar(
+  client: BedrockClient,
+  topic: string,
+  platforms: string[],
+  weeklyGoal: number,
+  timeHorizon: string
+): Promise<string> {
+  const system = `You are a content strategist specializing in documentary video content for YouTube and social media platforms.
+Generate a content calendar with video ideas that are historically accurate, engaging, and optimized for the target platforms.
+Respond in JSON format with an array of video objects containing: title, description, format (youtube, youtube_short, or tiktok), scheduledDate.`;
+
+  const userPrompt = `Create a content calendar for the topic "${topic}".
+Target platforms: ${platforms.join(', ')}
+Weekly production goal: ${weeklyGoal} videos
+Time horizon: ${timeHorizon}
+
+Generate engaging video ideas with optimal scheduling.`;
+
+  return invokeClaudeModel({
+    client,
+    model: 'sonnet',
+    messages: [{ role: 'user', content: userPrompt }],
+    system,
+  });
+}
+
+export async function generateScript(
+  client: BedrockClient,
+  sourceText: string,
+  duration: string,
+  tone: string,
+  additionalPrompt?: string
+): Promise<string> {
+  const toneDescriptions: Record<string, string> = {
+    mike_duncan: `Write in the style of Mike Duncan (Revolutions podcast):
+- Conversational yet authoritative tone
+- Build tension through pacing
+- Use rhetorical questions to engage the audience
+- Personal asides that connect history to human experience`,
+    mark_felton: `Write in the style of Mark Felton:
+- Direct, military precision in language
+- Fact-dense delivery with specific dates and numbers
+- Minimal editorializing
+- Clear, concise sentences`,
+  };
+
+  const system = `You are a documentary scriptwriter specializing in history content.
+Write scripts that are engaging, accurate, and optimized for video narration.
+Format: One sentence per line, with clear paragraph breaks for pacing.
+${toneDescriptions[tone] || ''}`;
+
+  const userPrompt = `Convert the following source material into a documentary script.
+Target duration: ${duration}
+${additionalPrompt ? `Additional instructions: ${additionalPrompt}` : ''}
+
+SOURCE MATERIAL:
+${sourceText}
+
+Write an engaging documentary script based on this content.`;
+
+  return invokeClaudeModel({
+    client,
+    model: 'sonnet',
+    messages: [{ role: 'user', content: userPrompt }],
+    system,
+    maxTokens: 8192,
+  });
+}
+
+export async function generateAudioTags(
+  client: BedrockClient,
+  script: string
+): Promise<string> {
+  const system = `You are an audio director for documentary narration.
+Your task is to add emotional and delivery tags to scripts for text-to-speech processing.
+
+Available tags:
+- [dramatic] - for impactful moments
+- [whispered] - for intimate or secretive content
+- [urgent] - for tense, action-packed moments
+- [calm] - for reflective passages
+- [excited] - for discoveries or revelations
+- [somber] - for tragic events
+
+Use ... for pauses. Add pronunciation guides in (parentheses) where needed.
+Preserve the original text while adding tags at the start of relevant sentences.`;
+
+  const userPrompt = `Add audio tags to this script for voice-over recording:
+
+${script}`;
+
+  return invokeClaudeModel({
+    client,
+    model: 'haiku', // Use Haiku for cost optimization
+    messages: [{ role: 'user', content: userPrompt }],
+    system,
+  });
+}
+
+export async function generateVisualTags(
+  client: BedrockClient,
+  script: string,
+  clipDuration: number,
+  totalDuration: number
+): Promise<string> {
+  const numberOfVisuals = Math.ceil(totalDuration / clipDuration);
+
+  const system = `You are a visual director for documentary content.
+Generate visual tags to be placed throughout a script, indicating what images or videos should appear.
+
+Each visual tag should include:
+- Sequential number (1, 2, 3...)
+- Visual description (what the image should show)
+- Search keywords (for finding images)
+- Camera movement suggestion (drifting_still, dolly_in, dolly_out, pan_left, pan_right, tilt_up, tilt_down, zoom_in, zoom_out)
+
+Rules:
+- 50% of visuals should use "drifting_still" for variety
+- Never repeat camera movements consecutively
+- Place tags at natural transition points in the narrative
+- Respond in JSON format`;
+
+  const userPrompt = `Generate ${numberOfVisuals} visual tags for this script:
+
+${script}
+
+Distribute the visual tags evenly throughout the content.`;
+
+  return invokeClaudeModel({
+    client,
+    model: 'sonnet',
+    messages: [{ role: 'user', content: userPrompt }],
+    system,
+  });
+}
+
+export async function analyzeMusicRequirements(
+  client: BedrockClient,
+  script: string
+): Promise<string> {
+  const system = `You are a music supervisor for documentary content.
+Analyze scripts to determine appropriate background music characteristics.
+Respond in JSON format with: mood, tempo (bpm range), genre suggestions, and specific emotional notes for different sections.`;
+
+  const userPrompt = `Analyze this documentary script and recommend background music:
+
+${script}`;
+
+  return invokeClaudeModel({
+    client,
+    model: 'haiku',
+    messages: [{ role: 'user', content: userPrompt }],
+    system,
+  });
+}
+
+export async function generateWikipediaSearchKeywords(
+  client: BedrockClient,
+  topic: string
+): Promise<string[]> {
+  const system = `You are a research assistant. Generate optimal search keywords for finding Wikipedia articles about historical topics.
+Return a JSON array of 3-5 search terms, ordered from most specific to most general.`;
+
+  const userPrompt = `Generate Wikipedia search keywords for: ${topic}`;
+
+  const response = await invokeClaudeModel({
+    client,
+    model: 'haiku',
+    messages: [{ role: 'user', content: userPrompt }],
+    system,
+  });
+
+  try {
+    return JSON.parse(response);
+  } catch {
+    // If parsing fails, extract keywords from text
+    return response.split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
+  }
+}

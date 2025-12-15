@@ -19,3 +19,6 @@ https://developer.artlist.io/welcome
 
 ELEVENLABS:
 https://elevenlabs.io/docs/api-reference/text-to-dialogue/convert-with-timestamps
+
+BEDROCK API:
+https://docs.aws.amazon.com/bedrock/latest/APIReference/API_Operations_Amazon_Bedrock.html
