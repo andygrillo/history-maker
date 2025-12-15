@@ -163,11 +163,16 @@ export async function generateScript(
   additionalPrompt?: string
 ): Promise<string> {
   const toneDescriptions: Record<string, string> = {
-    mike_duncan: `Write in the style of Mike Duncan (Revolutions podcast):
+    mike_duncan: `Write in the style of Mike Duncan from the "Revolutions" podcast:
 - Conversational yet authoritative tone
-- Build tension through pacing
-- Use rhetorical questions to engage the audience
-- Personal asides that connect history to human experience`,
+- Use "we" to bring the audience along on the journey
+- Include moments of wit and dry humor
+- Build narrative tension naturally
+- Connect events to broader themes
+- Use rhetorical questions to engage listeners
+
+Example of the style:
+"So we left off last time with the final disintegration of the Estates General and the King's order for all three Estates to come together under this self-declared thing, the National Assembly. As will often be the case over the next few years, many observers at the time thought that this moment would mark the end of the Revolution... Little did they know that this supposed finish line was about to be reduced to a mere footnote in history, because just two weeks later the Paris mobs went nuts and stormed the Bastille—and that sort of became the 'it' event of the summer."`,
     mark_felton: `Write in the style of Mark Felton:
 - Direct, military precision in language
 - Fact-dense delivery with specific dates and numbers
