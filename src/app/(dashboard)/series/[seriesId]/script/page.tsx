@@ -255,18 +255,11 @@ export default function ScriptPage() {
 
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
-      {/* Video info header */}
+      {/* Video title header */}
       {video && (
-        <Paper sx={{ p: 2, mb: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
-            {video.title}
-          </Typography>
-          {video.description && (
-            <Typography variant="body2" color="text.secondary">
-              {video.description}
-            </Typography>
-          )}
-        </Paper>
+        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+          {video.title}
+        </Typography>
       )}
 
       {/* Main tabs */}
