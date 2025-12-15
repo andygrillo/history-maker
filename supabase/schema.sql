@@ -45,6 +45,9 @@ CREATE TABLE IF NOT EXISTS series (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   topic TEXT NOT NULL,
+  weekly_goal INTEGER DEFAULT 3 CHECK (weekly_goal >= 1 AND weekly_goal <= 7),
+  time_horizon TEXT DEFAULT '1_week' CHECK (time_horizon IN ('1_week', '1_month', '3_months')),
+  platforms TEXT[] DEFAULT ARRAY['youtube', 'youtube_short'],
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

@@ -130,35 +130,56 @@ export default function PlannerPage() {
   const supabase = createClient();
 
   const [topic, setTopic] = useState('');
-  const [isLoadingTopic, setIsLoadingTopic] = useState(true);
-  const [selectedPlatforms, setSelectedPlatforms] = useState(['youtube', 'youtube_short']);
+  const [isLoadingConfig, setIsLoadingConfig] = useState(true);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
   const [weeklyGoal, setWeeklyGoal] = useState(3);
   const [timeHorizon, setTimeHorizon] = useState('1_week');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoadingLucky, setIsLoadingLucky] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [slots, setSlots] = useState<VideoSlot[]>([]);
-  const [existingVideos, setExistingVideos] = useState<VideoSlot[]>([]);
+  const [dbVideos, setDbVideos] = useState<VideoSlot[]>([]);
   const [editingSlot, setEditingSlot] = useState<{ index: number; title: string; description: string } | null>(null);
 
-  // Load series topic on mount
+  // Load series config on mount
   useEffect(() => {
     async function loadSeries() {
       const { data: series } = await supabase
         .from('series')
-        .select('topic')
+        .select('topic, weekly_goal, time_horizon, platforms')
         .eq('id', seriesId)
         .single();
 
-      if (series && series.topic !== 'My Documentary Series') {
-        setTopic(series.topic);
+      if (series) {
+        if (series.topic !== 'My Documentary Series') {
+          setTopic(series.topic);
+        }
+        if (series.weekly_goal) {
+          setWeeklyGoal(series.weekly_goal);
+        }
+        if (series.time_horizon) {
+          setTimeHorizon(series.time_horizon);
+        }
+        if (series.platforms && series.platforms.length > 0) {
+          setSelectedPlatforms(series.platforms);
+        } else {
+          setSelectedPlatforms(['youtube', 'youtube_short']);
+        }
       }
-      setIsLoadingTopic(false);
+      setIsLoadingConfig(false);
     }
     loadSeries();
   }, [seriesId, supabase]);
 
-  // Load existing videos for this series on mount
+  // Save config to series when it changes
+  const saveConfig = async (config: { weekly_goal?: number; time_horizon?: string; platforms?: string[] }) => {
+    await supabase
+      .from('series')
+      .update(config)
+      .eq('id', seriesId);
+  };
+
+  // Load existing videos from database on mount
   useEffect(() => {
     async function loadVideos() {
       const { data: videos } = await supabase
@@ -176,28 +197,62 @@ export default function PlannerPage() {
           format: video.format,
           scheduledDate: video.scheduled_date,
         }));
-        setExistingVideos(items);
-        setSlots(items);
+        setDbVideos(items);
       }
     }
     loadVideos();
   }, [seriesId, supabase]);
 
-  // Calculate slots when config changes (only if no existing videos)
-  const calculatedSlots = useMemo(() => {
-    if (selectedPlatforms.length === 0) return [];
-    return generateSlots(weeklyGoal, timeHorizon, selectedPlatforms);
-  }, [weeklyGoal, timeHorizon, selectedPlatforms]);
-
-  // Update slots when calculation changes (merge with existing)
+  // Calculate slots from config - config always determines number and types
   useEffect(() => {
-    if (existingVideos.length > 0) {
-      // Keep existing videos, they take priority
-      setSlots(existingVideos);
-    } else {
-      setSlots(calculatedSlots);
-    }
-  }, [calculatedSlots, existingVideos]);
+    if (isLoadingConfig) return;
+    if (selectedPlatforms.length === 0) return;
+
+    // Config determines slots
+    const newSlots = generateSlots(weeklyGoal, timeHorizon, selectedPlatforms);
+
+    // Merge with existing videos from DB and current state
+    setSlots((prevSlots) => {
+      // Combine DB videos with current state (DB videos take priority on first load)
+      const allFilledVideos = [...dbVideos];
+      // Add any filled slots from prevSlots that aren't in dbVideos
+      prevSlots.forEach((s) => {
+        if ((s.videoTitle || s.id) && !allFilledVideos.some((v) => v.id === s.id)) {
+          allFilledVideos.push(s);
+        }
+      });
+
+      // For each new slot, try to find a matching filled video by format
+      const usedFilledIds = new Set<string>();
+      const result = newSlots.map((newSlot) => {
+        const matchingFilled = allFilledVideos.find(
+          (f) => f.format === newSlot.format && f.id && !usedFilledIds.has(f.id)
+        );
+
+        if (matchingFilled && matchingFilled.id) {
+          usedFilledIds.add(matchingFilled.id);
+          return {
+            ...newSlot,
+            id: matchingFilled.id,
+            videoTitle: matchingFilled.videoTitle,
+            description: matchingFilled.description,
+          };
+        }
+        return newSlot;
+      });
+
+      // Delete orphaned videos from database (videos that didn't fit in new slots)
+      const orphanedVideos = allFilledVideos.filter((f) => f.id && !usedFilledIds.has(f.id));
+      if (orphanedVideos.length > 0) {
+        const orphanedIds = orphanedVideos.map((v) => v.id).filter(Boolean) as string[];
+        supabase.from('videos').delete().in('id', orphanedIds).then(() => {
+          // Videos deleted silently
+        });
+      }
+
+      return result;
+    });
+  }, [weeklyGoal, timeHorizon, selectedPlatforms, isLoadingConfig, supabase, dbVideos]);
 
   // Save topic to series when it changes (debounced)
   const saveTopic = async (newTopic: string) => {
@@ -209,11 +264,23 @@ export default function PlannerPage() {
   };
 
   const handlePlatformToggle = (platformId: string) => {
-    setSelectedPlatforms((prev) =>
-      prev.includes(platformId)
+    setSelectedPlatforms((prev) => {
+      const newPlatforms = prev.includes(platformId)
         ? prev.filter((p) => p !== platformId)
-        : [...prev, platformId]
-    );
+        : [...prev, platformId];
+      saveConfig({ platforms: newPlatforms });
+      return newPlatforms;
+    });
+  };
+
+  const handleWeeklyGoalChange = (value: number) => {
+    setWeeklyGoal(value);
+    saveConfig({ weekly_goal: value });
+  };
+
+  const handleTimeHorizonChange = (value: string) => {
+    setTimeHorizon(value);
+    saveConfig({ time_horizon: value });
   };
 
   const handleFeelingLucky = async () => {
@@ -297,11 +364,6 @@ export default function PlannerPage() {
         return updated;
       });
 
-      // Update existing videos to include newly created ones
-      setExistingVideos((prev) => {
-        const newVideos = data.items.filter((item: VideoSlot) => item.id);
-        return [...prev, ...newVideos];
-      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate calendar');
     } finally {
@@ -436,9 +498,14 @@ export default function PlannerPage() {
         await supabase.from('videos').delete().eq('id', slot.id);
       }
 
-      // Remove from slots
-      setSlots((prev) => prev.filter((s) => s.index !== slotIndex));
-      setExistingVideos((prev) => prev.filter((s) => s.index !== slotIndex));
+      // Clear the slot content but keep the card
+      setSlots((prev) =>
+        prev.map((s) =>
+          s.index === slotIndex
+            ? { index: s.index, format: s.format, scheduledDate: s.scheduledDate }
+            : s
+        )
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete video');
     }
@@ -474,15 +541,15 @@ export default function PlannerPage() {
       <TextField
         fullWidth
         placeholder="Enter your series topic: 'The French Revolution', 'Ancient Rome', 'World War II'..."
-        value={isLoadingTopic ? '' : topic}
+        value={isLoadingConfig ? '' : topic}
         onChange={(e) => setTopic(e.target.value)}
         variant="outlined"
         size="small"
-        disabled={isLoadingTopic}
+        disabled={isLoadingConfig}
       />
       <IconButton
         onClick={handleFeelingLucky}
-        disabled={isLoadingLucky || isLoadingTopic}
+        disabled={isLoadingLucky || isLoadingConfig}
         size="small"
         sx={{ border: 1, borderColor: 'divider' }}
       >
@@ -518,7 +585,7 @@ export default function PlannerPage() {
           </Typography>
           <Slider
             value={weeklyGoal}
-            onChange={(_, value) => setWeeklyGoal(value as number)}
+            onChange={(_, value) => handleWeeklyGoalChange(value as number)}
             min={1}
             max={7}
             size="small"
@@ -529,7 +596,7 @@ export default function PlannerPage() {
         <FormControl size="small" sx={{ minWidth: 120 }}>
           <Select
             value={timeHorizon}
-            onChange={(e) => setTimeHorizon(e.target.value)}
+            onChange={(e) => handleTimeHorizonChange(e.target.value)}
             displayEmpty
           >
             {timeHorizons.map((h) => (
