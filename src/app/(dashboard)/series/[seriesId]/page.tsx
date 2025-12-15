@@ -3,14 +3,14 @@
 import { useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 
-export default function ProjectPage() {
+export default function SeriesPage() {
   const router = useRouter();
   const params = useParams();
-  const projectId = params.projectId as string;
+  const seriesId = params.seriesId as string;
 
   useEffect(() => {
-    router.replace(`/project/${projectId}/planner`);
-  }, [router, projectId]);
+    router.replace(`/series/${seriesId}/planner`);
+  }, [router, seriesId]);
 
   return null;
 }

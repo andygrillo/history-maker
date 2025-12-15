@@ -83,7 +83,7 @@ export default function ImagePage() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
-  const projectId = params.projectId as string;
+  const seriesId = params.seriesId as string;
   const videoId = searchParams.get('videoId');
 
   const [script, setScript] = useState('');
@@ -275,7 +275,7 @@ export default function ImagePage() {
 
   const handleProceedToVideo = () => {
     if (videoId) {
-      router.push(`/project/${projectId}/video?videoId=${videoId}`);
+      router.push(`/series/${seriesId}/video?videoId=${videoId}`);
     }
   };
 

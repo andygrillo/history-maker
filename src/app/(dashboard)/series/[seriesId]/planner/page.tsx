@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   TextField,
@@ -21,10 +21,11 @@ import {
   CircularProgress,
   Alert,
 } from '@mui/material';
-import { AutoAwesome, Refresh, ArrowForward } from '@mui/icons-material';
+import { AutoAwesome, Refresh, ArrowForward, Casino } from '@mui/icons-material';
 import { useRouter, useParams } from 'next/navigation';
 import { ZoneLayout } from '@/components/layout/ZoneLayout';
 import { ContentCalendarItem } from '@/types';
+import { createClient } from '@/lib/supabase/client';
 
 const platforms = [
   { id: 'youtube', label: 'YouTube' },
@@ -41,15 +42,44 @@ const timeHorizons = [
 export default function PlannerPage() {
   const router = useRouter();
   const params = useParams();
-  const projectId = params.projectId as string;
+  const seriesId = params.seriesId as string;
+  const supabase = createClient();
 
   const [topic, setTopic] = useState('');
+  const [isLoadingTopic, setIsLoadingTopic] = useState(true);
   const [selectedPlatforms, setSelectedPlatforms] = useState(['youtube', 'youtube_short']);
   const [weeklyGoal, setWeeklyGoal] = useState(3);
   const [timeHorizon, setTimeHorizon] = useState('1_month');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingLucky, setIsLoadingLucky] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [calendarItems, setCalendarItems] = useState<ContentCalendarItem[]>([]);
+
+  // Load series topic on mount
+  useEffect(() => {
+    async function loadSeries() {
+      const { data: series } = await supabase
+        .from('series')
+        .select('topic')
+        .eq('id', seriesId)
+        .single();
+
+      if (series && series.topic !== 'My Documentary Series') {
+        setTopic(series.topic);
+      }
+      setIsLoadingTopic(false);
+    }
+    loadSeries();
+  }, [seriesId, supabase]);
+
+  // Save topic to series when it changes (debounced)
+  const saveTopic = async (newTopic: string) => {
+    if (!newTopic.trim()) return;
+    await supabase
+      .from('series')
+      .update({ topic: newTopic.trim() })
+      .eq('id', seriesId);
+  };
 
   const handlePlatformToggle = (platformId: string) => {
     setSelectedPlatforms((prev) =>
@@ -57,6 +87,28 @@ export default function PlannerPage() {
         ? prev.filter((p) => p !== platformId)
         : [...prev, platformId]
     );
+  };
+
+  const handleFeelingLucky = async () => {
+    setIsLoadingLucky(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/planner/lucky', {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate topic');
+      }
+
+      const data = await response.json();
+      setTopic(data.topic);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate topic');
+    } finally {
+      setIsLoadingLucky(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -68,12 +120,15 @@ export default function PlannerPage() {
     setIsGenerating(true);
     setError(null);
 
+    // Save the topic to the series
+    await saveTopic(topic);
+
     try {
       const response = await fetch('/api/planner/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projectId,
+          seriesId,
           topic,
           platforms: selectedPlatforms,
           weeklyGoal,
@@ -100,7 +155,7 @@ export default function PlannerPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projectId,
+          seriesId,
           title: item.videoTitle,
           description: item.description,
           format: item.format,
@@ -113,7 +168,7 @@ export default function PlannerPage() {
       }
 
       const { videoId } = await response.json();
-      router.push(`/project/${projectId}/script?videoId=${videoId}`);
+      router.push(`/series/${seriesId}/script?videoId=${videoId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create video');
     }
@@ -134,14 +189,27 @@ export default function PlannerPage() {
   };
 
   const promptPanel = (
-    <TextField
-      fullWidth
-      placeholder="Enter a theme: 'The French Revolution', 'Ancient Rome', 'World War II'..."
-      value={topic}
-      onChange={(e) => setTopic(e.target.value)}
-      variant="outlined"
-      size="small"
-    />
+    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+      <TextField
+        fullWidth
+        placeholder="Enter your series topic: 'The French Revolution', 'Ancient Rome', 'World War II'..."
+        value={isLoadingTopic ? '' : topic}
+        onChange={(e) => setTopic(e.target.value)}
+        variant="outlined"
+        size="small"
+        disabled={isLoadingTopic}
+      />
+      <Button
+        variant="outlined"
+        size="small"
+        onClick={handleFeelingLucky}
+        disabled={isLoadingLucky || isLoadingTopic}
+        startIcon={isLoadingLucky ? <CircularProgress size={14} /> : <Casino />}
+        sx={{ whiteSpace: 'nowrap' }}
+      >
+        Lucky
+      </Button>
+    </Box>
   );
 
   const configPanel = (
@@ -198,7 +266,7 @@ export default function PlannerPage() {
           onClick={handleGenerate}
           disabled={isGenerating}
         >
-          Generate
+          Generate Plan
         </Button>
         {calendarItems.length > 0 && (
           <Button
@@ -234,7 +302,7 @@ export default function PlannerPage() {
           }}
         >
           <Typography>
-            Enter a video theme above and click "Generate Calendar" to get AI-suggested video ideas.
+            Enter your series topic above and click "Generate Plan" to get AI-suggested video ideas.
           </Typography>
         </Box>
       ) : (
@@ -278,7 +346,7 @@ export default function PlannerPage() {
       promptPanel={promptPanel}
       configPanel={configPanel}
       outputPanel={outputPanel}
-      promptTitle="Video Theme"
+      promptTitle="Series Topic"
       configTitle="Planning Options"
       outputTitle="Video Ideas"
     />

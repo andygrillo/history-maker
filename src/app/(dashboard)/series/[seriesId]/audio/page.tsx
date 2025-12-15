@@ -45,7 +45,7 @@ export default function AudioPage() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
-  const projectId = params.projectId as string;
+  const seriesId = params.seriesId as string;
   const videoId = searchParams.get('videoId');
 
   const [script, setScript] = useState('');
@@ -228,7 +228,7 @@ export default function AudioPage() {
 
   const handleProceedToImage = () => {
     if (videoId) {
-      router.push(`/project/${projectId}/image?videoId=${videoId}`);
+      router.push(`/series/${seriesId}/image?videoId=${videoId}`);
     }
   };
 

@@ -1,7 +1,7 @@
 'use client';
 
-import { AppBar, Toolbar, Typography, IconButton, Box, Avatar, Menu, MenuItem } from '@mui/material';
-import { Settings, AccountCircle } from '@mui/icons-material';
+import { AppBar, Toolbar, Typography, IconButton, Box, Avatar, Menu, MenuItem, Button } from '@mui/material';
+import { Settings, AccountCircle, Dashboard } from '@mui/icons-material';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -37,7 +37,7 @@ export function Header() {
       }}
     >
       <Toolbar>
-        <Link href="/" style={{ textDecoration: 'none', color: 'inherit' }}>
+        <Link href="/dashboard" style={{ textDecoration: 'none', color: 'inherit' }}>
           <Typography
             variant="h6"
             component="div"
@@ -52,6 +52,16 @@ export function Header() {
             History Maker
           </Typography>
         </Link>
+
+        <Button
+          component={Link}
+          href="/dashboard"
+          startIcon={<Dashboard />}
+          sx={{ ml: 2, color: 'text.secondary' }}
+          size="small"
+        >
+          All Series
+        </Button>
 
         <Box sx={{ flexGrow: 1 }} />
 

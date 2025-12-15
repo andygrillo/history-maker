@@ -69,7 +69,7 @@ export default function VideoPage() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
-  const projectId = params.projectId as string;
+  const seriesId = params.seriesId as string;
   const videoId = searchParams.get('videoId');
 
   const [visuals, setVisuals] = useState<Visual[]>([]);
@@ -245,7 +245,7 @@ export default function VideoPage() {
 
   const handleProceedToMusic = () => {
     if (videoId) {
-      router.push(`/project/${projectId}/music?videoId=${videoId}`);
+      router.push(`/series/${seriesId}/music?videoId=${videoId}`);
     }
   };
 

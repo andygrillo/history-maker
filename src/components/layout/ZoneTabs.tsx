@@ -14,7 +14,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { ZoneType } from '@/types';
 
 interface ZoneTabsProps {
-  projectId: string;
+  seriesId: string;
 }
 
 const zones: { id: ZoneType; label: string; icon: React.ReactElement }[] = [
@@ -27,14 +27,14 @@ const zones: { id: ZoneType; label: string; icon: React.ReactElement }[] = [
   { id: 'export', label: 'Export', icon: <FileDownload /> },
 ];
 
-export function ZoneTabs({ projectId }: ZoneTabsProps) {
+export function ZoneTabs({ seriesId }: ZoneTabsProps) {
   const pathname = usePathname();
   const router = useRouter();
 
   const currentZone = zones.find((zone) => pathname.includes(`/${zone.id}`))?.id || 'planner';
 
   const handleChange = (_: React.SyntheticEvent, newValue: ZoneType) => {
-    router.push(`/project/${projectId}/${newValue}`);
+    router.push(`/series/${seriesId}/${newValue}`);
   };
 
   return (

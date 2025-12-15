@@ -1,8 +1,8 @@
-// Project (each user has one project - videos have topics, not the project)
-export interface Project {
+// Series (a documentary series about a topic)
+export interface Series {
   id: string;
   userId: string;
-  topic?: string; // Legacy field, kept for compatibility
+  topic: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -10,7 +10,7 @@ export interface Project {
 // Video
 export interface Video {
   id: string;
-  projectId: string;
+  seriesId: string;
   title: string;
   description: string;
   format: 'youtube' | 'youtube_short' | 'tiktok';

@@ -47,7 +47,7 @@ export default function MusicPage() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
-  const projectId = params.projectId as string;
+  const seriesId = params.seriesId as string;
   const videoId = searchParams.get('videoId');
 
   const [script, setScript] = useState('');
@@ -182,7 +182,7 @@ export default function MusicPage() {
 
       if (!response.ok) throw new Error('Failed to save selection');
 
-      router.push(`/project/${projectId}/export?videoId=${videoId}`);
+      router.push(`/series/${seriesId}/export?videoId=${videoId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save');
     }

@@ -40,8 +40,8 @@ CREATE TABLE IF NOT EXISTS user_settings (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Projects table
-CREATE TABLE IF NOT EXISTS projects (
+-- Series table
+CREATE TABLE IF NOT EXISTS series (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   topic TEXT NOT NULL,
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS projects (
 -- Videos table
 CREATE TABLE IF NOT EXISTS videos (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  project_id UUID REFERENCES projects(id) ON DELETE CASCADE NOT NULL,
+  series_id UUID REFERENCES series(id) ON DELETE CASCADE NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
   format TEXT CHECK (format IN ('youtube', 'youtube_short', 'tiktok')) DEFAULT 'youtube',
@@ -150,7 +150,7 @@ CREATE TABLE IF NOT EXISTS music_tracks (
 -- Enable RLS on all tables
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE series ENABLE ROW LEVEL SECURITY;
 ALTER TABLE videos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scripts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audios ENABLE ROW LEVEL SECURITY;
@@ -179,38 +179,38 @@ CREATE POLICY "Users can update own settings" ON user_settings
 CREATE POLICY "Users can insert own settings" ON user_settings
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- Projects policies
-CREATE POLICY "Users can view own projects" ON projects
+-- Series policies
+CREATE POLICY "Users can view own series" ON series
   FOR SELECT USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can create own projects" ON projects
+CREATE POLICY "Users can create own series" ON series
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can update own projects" ON projects
+CREATE POLICY "Users can update own series" ON series
   FOR UPDATE USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can delete own projects" ON projects
+CREATE POLICY "Users can delete own series" ON series
   FOR DELETE USING (auth.uid() = user_id);
 
 -- Videos policies
 CREATE POLICY "Users can view own videos" ON videos
   FOR SELECT USING (
-    EXISTS (SELECT 1 FROM projects WHERE projects.id = videos.project_id AND projects.user_id = auth.uid())
+    EXISTS (SELECT 1 FROM series WHERE series.id = videos.series_id AND series.user_id = auth.uid())
   );
 
-CREATE POLICY "Users can create videos in own projects" ON videos
+CREATE POLICY "Users can create videos in own series" ON videos
   FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM projects WHERE projects.id = videos.project_id AND projects.user_id = auth.uid())
+    EXISTS (SELECT 1 FROM series WHERE series.id = videos.series_id AND series.user_id = auth.uid())
   );
 
 CREATE POLICY "Users can update own videos" ON videos
   FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM projects WHERE projects.id = videos.project_id AND projects.user_id = auth.uid())
+    EXISTS (SELECT 1 FROM series WHERE series.id = videos.series_id AND series.user_id = auth.uid())
   );
 
 CREATE POLICY "Users can delete own videos" ON videos
   FOR DELETE USING (
-    EXISTS (SELECT 1 FROM projects WHERE projects.id = videos.project_id AND projects.user_id = auth.uid())
+    EXISTS (SELECT 1 FROM series WHERE series.id = videos.series_id AND series.user_id = auth.uid())
   );
 
 -- Scripts policies
@@ -218,8 +218,8 @@ CREATE POLICY "Users can view own scripts" ON scripts
   FOR SELECT USING (
     EXISTS (
       SELECT 1 FROM videos
-      JOIN projects ON projects.id = videos.project_id
-      WHERE videos.id = scripts.video_id AND projects.user_id = auth.uid()
+      JOIN series ON series.id = videos.series_id
+      WHERE videos.id = scripts.video_id AND series.user_id = auth.uid()
     )
   );
 
@@ -227,8 +227,8 @@ CREATE POLICY "Users can manage own scripts" ON scripts
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM videos
-      JOIN projects ON projects.id = videos.project_id
-      WHERE videos.id = scripts.video_id AND projects.user_id = auth.uid()
+      JOIN series ON series.id = videos.series_id
+      WHERE videos.id = scripts.video_id AND series.user_id = auth.uid()
     )
   );
 
@@ -238,8 +238,8 @@ CREATE POLICY "Users can manage own audios" ON audios
     EXISTS (
       SELECT 1 FROM scripts
       JOIN videos ON videos.id = scripts.video_id
-      JOIN projects ON projects.id = videos.project_id
-      WHERE scripts.id = audios.script_id AND projects.user_id = auth.uid()
+      JOIN series ON series.id = videos.series_id
+      WHERE scripts.id = audios.script_id AND series.user_id = auth.uid()
     )
   );
 
@@ -249,8 +249,8 @@ CREATE POLICY "Users can manage own visuals" ON visuals
     EXISTS (
       SELECT 1 FROM scripts
       JOIN videos ON videos.id = scripts.video_id
-      JOIN projects ON projects.id = videos.project_id
-      WHERE scripts.id = visuals.script_id AND projects.user_id = auth.uid()
+      JOIN series ON series.id = videos.series_id
+      WHERE scripts.id = visuals.script_id AND series.user_id = auth.uid()
     )
   );
 
@@ -261,8 +261,8 @@ CREATE POLICY "Users can manage own visual variants" ON visual_variants
       SELECT 1 FROM visuals
       JOIN scripts ON scripts.id = visuals.script_id
       JOIN videos ON videos.id = scripts.video_id
-      JOIN projects ON projects.id = videos.project_id
-      WHERE visuals.id = visual_variants.visual_id AND projects.user_id = auth.uid()
+      JOIN series ON series.id = videos.series_id
+      WHERE visuals.id = visual_variants.visual_id AND series.user_id = auth.uid()
     )
   );
 
@@ -273,8 +273,8 @@ CREATE POLICY "Users can manage own video clips" ON video_clips
       SELECT 1 FROM visuals
       JOIN scripts ON scripts.id = visuals.script_id
       JOIN videos ON videos.id = scripts.video_id
-      JOIN projects ON projects.id = videos.project_id
-      WHERE visuals.id = video_clips.visual_id AND projects.user_id = auth.uid()
+      JOIN series ON series.id = videos.series_id
+      WHERE visuals.id = video_clips.visual_id AND series.user_id = auth.uid()
     )
   );
 
@@ -283,8 +283,8 @@ CREATE POLICY "Users can manage own music tracks" ON music_tracks
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM videos
-      JOIN projects ON projects.id = videos.project_id
-      WHERE videos.id = music_tracks.video_id AND projects.user_id = auth.uid()
+      JOIN series ON series.id = videos.series_id
+      WHERE videos.id = music_tracks.video_id AND series.user_id = auth.uid()
     )
   );
 
@@ -303,7 +303,7 @@ CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles
 CREATE TRIGGER update_user_settings_updated_at BEFORE UPDATE ON user_settings
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_projects_updated_at BEFORE UPDATE ON projects
+CREATE TRIGGER update_series_updated_at BEFORE UPDATE ON series
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_videos_updated_at BEFORE UPDATE ON videos
@@ -347,8 +347,8 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
 -- Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
-CREATE INDEX IF NOT EXISTS idx_videos_project_id ON videos(project_id);
+CREATE INDEX IF NOT EXISTS idx_series_user_id ON series(user_id);
+CREATE INDEX IF NOT EXISTS idx_videos_series_id ON videos(series_id);
 CREATE INDEX IF NOT EXISTS idx_scripts_video_id ON scripts(video_id);
 CREATE INDEX IF NOT EXISTS idx_audios_script_id ON audios(script_id);
 CREATE INDEX IF NOT EXISTS idx_visuals_script_id ON visuals(script_id);

@@ -63,7 +63,7 @@ export default function ScriptPage() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
-  const projectId = params.projectId as string;
+  const seriesId = params.seriesId as string;
   const videoId = searchParams.get('videoId');
 
   const [inputMode, setInputMode] = useState<InputMode>('write');
@@ -163,7 +163,7 @@ export default function ScriptPage() {
 
   const handleProceedToAudio = () => {
     if (generatedScript && videoId) {
-      router.push(`/project/${projectId}/audio?videoId=${videoId}`);
+      router.push(`/series/${seriesId}/audio?videoId=${videoId}`);
     }
   };
 

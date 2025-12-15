@@ -11,29 +11,29 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { projectId, title, description, format, scheduledDate } = body;
+    const { seriesId, title, description, format, scheduledDate } = body;
 
-    if (!projectId || !title) {
-      return NextResponse.json({ error: 'Project ID and title are required' }, { status: 400 });
+    if (!seriesId || !title) {
+      return NextResponse.json({ error: 'Series ID and title are required' }, { status: 400 });
     }
 
-    // Verify project belongs to user
-    const { data: project } = await supabase
-      .from('projects')
+    // Verify series belongs to user
+    const { data: series } = await supabase
+      .from('series')
       .select('id')
-      .eq('id', projectId)
+      .eq('id', seriesId)
       .eq('user_id', user.id)
       .single();
 
-    if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    if (!series) {
+      return NextResponse.json({ error: 'Series not found' }, { status: 404 });
     }
 
     // Create video
     const { data: video, error } = await supabase
       .from('videos')
       .insert({
-        project_id: projectId,
+        series_id: seriesId,
         title,
         description: description || null,
         format: format || 'youtube',
@@ -68,17 +68,17 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
-    const projectId = searchParams.get('projectId');
+    const seriesId = searchParams.get('seriesId');
 
-    if (!projectId) {
-      return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
+    if (!seriesId) {
+      return NextResponse.json({ error: 'Series ID is required' }, { status: 400 });
     }
 
-    // Get videos for project
+    // Get videos for series
     const { data: videos, error } = await supabase
       .from('videos')
       .select('*')
-      .eq('project_id', projectId)
+      .eq('series_id', seriesId)
       .order('created_at', { ascending: false });
 
     if (error) {

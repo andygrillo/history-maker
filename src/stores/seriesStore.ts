@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import { Project, Video, Script, Audio, Visual, VideoClip, MusicTrack } from '@/types';
+import { Series, Video, Script, Audio, Visual, VideoClip, MusicTrack } from '@/types';
 
-interface ProjectState {
-  currentProject: Project | null;
+interface SeriesState {
+  currentSeries: Series | null;
   currentVideo: Video | null;
   videos: Video[];
   script: Script | null;
@@ -12,7 +12,7 @@ interface ProjectState {
   musicTracks: MusicTrack[];
 
   // Actions
-  setCurrentProject: (project: Project | null) => void;
+  setCurrentSeries: (series: Series | null) => void;
   setCurrentVideo: (video: Video | null) => void;
   setVideos: (videos: Video[]) => void;
   setScript: (script: Script | null) => void;
@@ -24,7 +24,7 @@ interface ProjectState {
 }
 
 const initialState = {
-  currentProject: null,
+  currentSeries: null,
   currentVideo: null,
   videos: [],
   script: null,
@@ -34,10 +34,10 @@ const initialState = {
   musicTracks: [],
 };
 
-export const useProjectStore = create<ProjectState>((set) => ({
+export const useSeriesStore = create<SeriesState>((set) => ({
   ...initialState,
 
-  setCurrentProject: (project) => set({ currentProject: project }),
+  setCurrentSeries: (series) => set({ currentSeries: series }),
   setCurrentVideo: (video) => set({ currentVideo: video }),
   setVideos: (videos) => set({ videos }),
   setScript: (script) => set({ script }),

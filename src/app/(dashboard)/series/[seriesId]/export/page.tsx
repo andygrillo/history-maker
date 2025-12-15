@@ -52,14 +52,14 @@ interface AssetInfo {
 export default function ExportPage() {
   const params = useParams();
   const searchParams = useSearchParams();
-  const projectId = params.projectId as string;
+  const seriesId = params.seriesId as string;
   const videoId = searchParams.get('videoId');
 
   const [assets, setAssets] = useState<AssetInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [projectStats, setProjectStats] = useState({
+  const [seriesStats, setSeriesStats] = useState({
     totalDuration: 0,
     assetCount: 0,
     storageUsed: 0,
@@ -119,7 +119,7 @@ export default function ExportPage() {
             },
           ]);
 
-          setProjectStats({
+          setSeriesStats({
             totalDuration: data.stats?.totalDuration || 0,
             assetCount: data.stats?.assetCount || 0,
             storageUsed: data.stats?.storageUsed || 0,
@@ -222,12 +222,12 @@ export default function ExportPage() {
   const promptPanel = (
     <Box>
       <Typography variant="h6" gutterBottom>
-        Project Summary
+        Series Summary
       </Typography>
       <Grid container spacing={2}>
         <Grid size={{ xs: 6, md: 3 }}>
           <Paper sx={{ p: 2, textAlign: 'center' }}>
-            <Typography variant="h4">{projectStats.assetCount}</Typography>
+            <Typography variant="h4">{seriesStats.assetCount}</Typography>
             <Typography variant="body2" color="text.secondary">
               Total Assets
             </Typography>
@@ -236,7 +236,7 @@ export default function ExportPage() {
         <Grid size={{ xs: 6, md: 3 }}>
           <Paper sx={{ p: 2, textAlign: 'center' }}>
             <Typography variant="h4">
-              {Math.floor(projectStats.totalDuration / 60)}:{String(projectStats.totalDuration % 60).padStart(2, '0')}
+              {Math.floor(seriesStats.totalDuration / 60)}:{String(seriesStats.totalDuration % 60).padStart(2, '0')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Est. Duration
@@ -246,7 +246,7 @@ export default function ExportPage() {
         <Grid size={{ xs: 6, md: 3 }}>
           <Paper sx={{ p: 2, textAlign: 'center' }}>
             <Typography variant="h4">
-              {(projectStats.storageUsed / 1024 / 1024).toFixed(1)} MB
+              {(seriesStats.storageUsed / 1024 / 1024).toFixed(1)} MB
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Storage Used
@@ -255,7 +255,7 @@ export default function ExportPage() {
         </Grid>
         <Grid size={{ xs: 6, md: 3 }}>
           <Paper sx={{ p: 2, textAlign: 'center' }}>
-            <Typography variant="h4">${projectStats.estimatedCost.toFixed(2)}</Typography>
+            <Typography variant="h4">${seriesStats.estimatedCost.toFixed(2)}</Typography>
             <Typography variant="body2" color="text.secondary">
               Est. API Cost
             </Typography>
@@ -468,7 +468,7 @@ export default function ExportPage() {
       promptPanel={promptPanel}
       configPanel={configPanel}
       outputPanel={outputPanel}
-      promptTitle="Project Overview"
+      promptTitle="Series Overview"
       configTitle="Export Options"
       outputTitle="Assets & Downloads"
     />
