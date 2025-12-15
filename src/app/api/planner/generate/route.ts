@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createBedrockClient, invokeClaudeModel } from '@/lib/api/bedrock';
+import { getUserPrompts } from '@/lib/prompts/getUserPrompts';
+import { fillTemplate } from '@/lib/prompts/defaults';
 
 interface Slot {
   index: number;
@@ -54,6 +56,9 @@ export async function POST(request: NextRequest) {
       apiKey: bedrockApiKey,
     });
 
+    // Get user-customized prompts (or defaults)
+    const prompts = await getUserPrompts(supabase, user.id);
+
     // Count videos by format
     const formatCounts: Record<string, number> = {};
     (slots as Slot[]).forEach((slot) => {
@@ -70,26 +75,18 @@ export async function POST(request: NextRequest) {
       .map(([format, count]) => `${count} ${formatLabels[format] || format}`)
       .join(', ');
 
-    const system = `You are a content strategist specializing in documentary video content for YouTube and social media platforms.
-Generate a content calendar with video ideas that are historically accurate, engaging, and optimized for the target platforms.
-Respond in JSON format with an array of video objects.
-Each object must have: index (number matching input), title (string), description (string)
-IMPORTANT: Generate EXACTLY ${slots.length} videos matching the provided slot indices.`;
-
     const slotsDescription = (slots as Slot[])
       .map((s) => `- Index ${s.index}: ${formatLabels[s.format] || s.format}`)
       .join('\n');
 
-    const userPrompt = `Create video ideas for the topic "${topic}".
-
-EXACT REQUIREMENTS:
-- Total videos: ${slots.length}
-- Breakdown: ${breakdownStr}
-
-Generate content for these specific slots:
-${slotsDescription}
-
-Each video should have a unique angle on the topic. Return a JSON array with objects containing: index, title, description.`;
+    // Build prompts from user-customized templates
+    const system = prompts.plannerSystem;
+    const userPrompt = fillTemplate(prompts.plannerUser, {
+      topic,
+      totalVideos: String(slots.length),
+      breakdown: breakdownStr,
+      slotsDescription,
+    });
 
     const result = await invokeClaudeModel({
       client,

@@ -43,7 +43,7 @@ const promptCategories = [
     label: 'Planner',
     prompts: [
       { key: 'plannerSystem', label: 'System Prompt', description: 'Instructions for content calendar generation' },
-      { key: 'plannerUser', label: 'User Prompt Template', description: 'Template with {{topic}}, {{platforms}}, {{weeklyGoal}}, {{timeHorizon}}' },
+      { key: 'plannerUser', label: 'User Prompt Template', description: 'Variables: {{topic}}, {{totalVideos}}, {{breakdown}}, {{slotsDescription}}' },
     ],
   },
   {
@@ -231,7 +231,7 @@ export default function PromptsSettingsPage() {
             variant="scrollable"
             scrollButtons="auto"
           >
-            {promptCategories.map((cat, index) => (
+            {promptCategories.map((cat) => (
               <Tab key={cat.id} label={cat.label} />
             ))}
           </Tabs>

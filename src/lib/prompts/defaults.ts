@@ -30,19 +30,26 @@ export const defaultPrompts: PromptTemplates = {
   // Planner prompts
   plannerSystem: `You are a content strategist specializing in documentary video content for YouTube and social media platforms.
 Generate a content calendar with video ideas that are historically accurate, engaging, and optimized for the target platforms.
-Respond in JSON format with an array of video objects containing: id, videoTitle, description, format (youtube, youtube_short, or tiktok), scheduledDate, status.`,
+Respond in JSON format with an array of video objects.
+Each object must have: index (number matching input), title (string), description (string)
+IMPORTANT: Generate EXACTLY the number of videos specified matching the provided slot indices.`,
 
-  plannerUser: `Create a content calendar for the topic "{{topic}}".
-Target platforms: {{platforms}}
-Weekly production goal: {{weeklyGoal}} videos
-Time horizon: {{timeHorizon}}
+  plannerUser: `Create video ideas for the topic "{{topic}}".
 
-Generate engaging video ideas with optimal scheduling.`,
+EXACT REQUIREMENTS:
+- Total videos: {{totalVideos}}
+- Breakdown: {{breakdown}}
+
+Generate content for these specific slots:
+{{slotsDescription}}
+
+Each video should have a unique angle on the topic. Return a JSON array with objects containing: index, title, description.`,
 
   // Script generation prompts
   scriptSystem: `You are a documentary scriptwriter specializing in history content.
 Write scripts that are engaging, accurate, and optimized for video narration.
 Format: One sentence per line, with clear paragraph breaks for pacing.
+IMPORTANT: Do NOT use any emojis in the script.
 {{toneInstructions}}`,
 
   scriptUser: `Convert the following source material into a documentary script.
@@ -107,21 +114,27 @@ Respond in JSON format with: mood, tempo (bpm range as string), genres (array), 
 {{script}}`,
 
   // Narrative tones
-  mikeDuncanTone: `Write in the style of Mike Duncan (Revolutions podcast):
+  mikeDuncanTone: `Write in the style of Mike Duncan from the "Revolutions" podcast:
 - Conversational yet authoritative tone
-- Build tension through pacing
-- Use rhetorical questions to engage the audience
-- Personal asides that connect history to human experience
-- Occasional dry humor
-- Clear narrative arc with dramatic reveals`,
+- Use "we" to bring the audience along on the journey
+- Include moments of wit and dry humor
+- Build narrative tension naturally
+- Connect events to broader themes
+- Use rhetorical questions to engage listeners
 
-  markFeltonTone: `Write in the style of Mark Felton:
-- Direct, military precision in language
-- Fact-dense delivery with specific dates and numbers
-- Minimal editorializing
-- Clear, concise sentences
-- Focus on lesser-known historical facts
-- Professional, scholarly tone`,
+Example of the style:
+"So we left off last time with the final disintegration of the Estates General and the King's order for all three Estates to come together under this self-declared thing, the National Assembly. As will often be the case over the next few years, many observers at the time thought that this moment would mark the end of the Revolution... Little did they know that this supposed finish line was about to be reduced to a mere footnote in history, because just two weeks later the Paris mobs went nuts and stormed the Bastille—and that sort of became the 'it' event of the summer."`,
+
+  markFeltonTone: `Write in the style of Mark Felton from Mark Felton Productions:
+- Direct, factual, authoritative tone
+- Begin with a compelling question or statement about the subject
+- Provide detailed biographical or historical context
+- Use precise dates, names, ranks, and positions
+- Build a narrative through chronological progression
+- Matter-of-fact delivery without dramatic embellishment
+
+Example of the style:
+"So, who was Martin Borman? Born in 1900, he had served in the artillery at the tail end of World War I, leaving the Army in 1919. An estate manager during the Weimar Republic period, he joined a paramilitary Freikorps unit of disgruntled right-wing soldiers. An accomplice to a political murder in 1924, Borman served a year in prison. Released in 1925, he went on to join the Nazi party two years later... After Hitler came to power in 1933, Borman was appointed Chief of Staff to Deputy Führer Rudolph Hess and given the rank of Reichsleiter, the highest political rank in the NSDAP."`,
 };
 
 // Helper function to fill in template variables
