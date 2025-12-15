@@ -1,4 +1,5 @@
-when using these technolgies refer to these sites:
+-refer to ARCHITECTURE.md to see site architecture for this project
+- when using these technolgies refer to these sites:
 
 SUPABASE:
 https://supabase.com/docs/guides/getting-started/quickstarts/nextjs
