@@ -12,10 +12,26 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { topic, platforms, weeklyGoal, timeHorizon } = body;
+    const { seriesId, topic, platforms, weeklyGoal, timeHorizon } = body;
 
     if (!topic) {
       return NextResponse.json({ error: 'Topic is required' }, { status: 400 });
+    }
+
+    if (!seriesId) {
+      return NextResponse.json({ error: 'Series ID is required' }, { status: 400 });
+    }
+
+    // Verify series belongs to user
+    const { data: series } = await supabase
+      .from('series')
+      .select('id')
+      .eq('id', seriesId)
+      .eq('user_id', user.id)
+      .single();
+
+    if (!series) {
+      return NextResponse.json({ error: 'Series not found' }, { status: 404 });
     }
 
     // Get Bedrock API key from environment
@@ -49,23 +65,42 @@ export async function POST(request: NextRequest) {
     } catch {
       // If parsing fails, create a simple response
       items = [{
-        id: crypto.randomUUID(),
         videoTitle: `${topic} - Introduction`,
         description: `An introduction to ${topic}`,
         format: 'youtube',
         scheduledDate: new Date().toISOString(),
-        status: 'planned',
       }];
     }
 
-    // Normalize the items
-    const normalizedItems = items.map((item: Record<string, unknown>, index: number) => ({
-      id: item.id || crypto.randomUUID(),
-      videoTitle: item.videoTitle || item.title || `Video ${index + 1}`,
+    // Normalize the items and prepare for database insert
+    const videosToInsert = items.map((item: Record<string, unknown>, index: number) => ({
+      series_id: seriesId,
+      title: item.videoTitle || item.title || `Video ${index + 1}`,
       description: item.description || '',
       format: item.format || 'youtube',
-      scheduledDate: item.scheduledDate || new Date(Date.now() + index * 7 * 24 * 60 * 60 * 1000).toISOString(),
+      scheduled_date: item.scheduledDate || new Date(Date.now() + index * 7 * 24 * 60 * 60 * 1000).toISOString(),
       status: 'planned',
+    }));
+
+    // Insert all videos into the database
+    const { data: insertedVideos, error: insertError } = await supabase
+      .from('videos')
+      .insert(videosToInsert)
+      .select('id, title, description, format, scheduled_date, status');
+
+    if (insertError) {
+      console.error('Video insert error:', insertError);
+      return NextResponse.json({ error: 'Failed to save video ideas' }, { status: 500 });
+    }
+
+    // Return normalized items with database IDs
+    const normalizedItems = insertedVideos.map((video) => ({
+      id: video.id,
+      videoTitle: video.title,
+      description: video.description,
+      format: video.format,
+      scheduledDate: video.scheduled_date,
+      status: video.status,
     }));
 
     return NextResponse.json({ items: normalizedItems });

@@ -85,16 +85,67 @@ export async function generateContentCalendar(
   weeklyGoal: number,
   timeHorizon: string
 ): Promise<string> {
+  // Calculate weeks from time horizon
+  const weeksMap: Record<string, number> = {
+    '1_week': 1,
+    '1_month': 4,
+    '3_months': 12,
+  };
+  const weeks = weeksMap[timeHorizon] || 1;
+
+  // Calculate total videos
+  const totalVideos = weeks * weeklyGoal;
+
+  // Calculate platform breakdown with 1:3 ratio (youtube:others)
+  const hasYoutube = platforms.includes('youtube');
+  const otherPlatforms = platforms.filter(p => p !== 'youtube');
+
+  let platformBreakdown: Record<string, number> = {};
+
+  if (hasYoutube && otherPlatforms.length > 0) {
+    // 1:3 ratio - youtube gets 1/4 of total, others split the remaining 3/4
+    const youtubeCount = Math.max(1, Math.round(totalVideos / 4));
+    const othersTotal = totalVideos - youtubeCount;
+    const perOtherPlatform = Math.floor(othersTotal / otherPlatforms.length);
+    const remainder = othersTotal % otherPlatforms.length;
+
+    platformBreakdown['youtube'] = youtubeCount;
+    otherPlatforms.forEach((platform, index) => {
+      platformBreakdown[platform] = perOtherPlatform + (index < remainder ? 1 : 0);
+    });
+  } else if (hasYoutube) {
+    // Only youtube selected
+    platformBreakdown['youtube'] = totalVideos;
+  } else {
+    // No youtube, split evenly among other platforms
+    const perPlatform = Math.floor(totalVideos / otherPlatforms.length);
+    const remainder = totalVideos % otherPlatforms.length;
+    otherPlatforms.forEach((platform, index) => {
+      platformBreakdown[platform] = perPlatform + (index < remainder ? 1 : 0);
+    });
+  }
+
+  // Build exact breakdown string for prompt
+  const breakdownStr = Object.entries(platformBreakdown)
+    .map(([platform, count]) => `${count} ${platform.replace('_', ' ')} videos`)
+    .join(', ');
+
   const system = `You are a content strategist specializing in documentary video content for YouTube and social media platforms.
 Generate a content calendar with video ideas that are historically accurate, engaging, and optimized for the target platforms.
-Respond in JSON format with an array of video objects containing: title, description, format (youtube, youtube_short, or tiktok), scheduledDate.`;
+Respond in JSON format with an array of video objects containing: title, description, format (youtube, youtube_short, or tiktok), scheduledDate.
+IMPORTANT: Generate EXACTLY the number of videos specified for each platform - no more, no less.`;
 
   const userPrompt = `Create a content calendar for the topic "${topic}".
-Target platforms: ${platforms.join(', ')}
-Weekly production goal: ${weeklyGoal} videos
-Time horizon: ${timeHorizon}
 
-Generate engaging video ideas with optimal scheduling.`;
+EXACT VIDEO REQUIREMENTS:
+- Total videos: ${totalVideos}
+- Breakdown: ${breakdownStr}
+- Time period: ${weeks} week(s)
+
+Generate EXACTLY ${totalVideos} video ideas with this exact breakdown:
+${Object.entries(platformBreakdown).map(([platform, count]) => `- ${platform}: ${count} videos`).join('\n')}
+
+Each video should have a unique angle on the topic. Schedule them evenly across the ${weeks} week period starting from today.`;
 
   return invokeClaudeModel({
     client,

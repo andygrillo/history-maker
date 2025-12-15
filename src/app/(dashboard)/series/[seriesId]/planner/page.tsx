@@ -50,7 +50,7 @@ export default function PlannerPage() {
   const [isLoadingTopic, setIsLoadingTopic] = useState(true);
   const [selectedPlatforms, setSelectedPlatforms] = useState(['youtube', 'youtube_short']);
   const [weeklyGoal, setWeeklyGoal] = useState(3);
-  const [timeHorizon, setTimeHorizon] = useState('1_month');
+  const [timeHorizon, setTimeHorizon] = useState('1_week');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoadingLucky, setIsLoadingLucky] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,29 +150,9 @@ export default function PlannerPage() {
     }
   };
 
-  const handleSelectVideo = async (item: ContentCalendarItem) => {
-    try {
-      const response = await fetch('/api/videos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          seriesId,
-          title: item.videoTitle,
-          description: item.description,
-          format: item.format,
-          scheduledDate: item.scheduledDate,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create video');
-      }
-
-      const { videoId } = await response.json();
-      router.push(`/series/${seriesId}/script?videoId=${videoId}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create video');
-    }
+  const handleSelectVideo = (item: ContentCalendarItem) => {
+    // Video is already saved to database, just navigate to script page
+    router.push(`/series/${seriesId}/script?videoId=${item.id}`);
   };
 
   const formatBadge = (format: string) => {
