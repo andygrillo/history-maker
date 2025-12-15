@@ -19,7 +19,6 @@ import {
   ListItemButton,
   ListItemText,
   Paper,
-  Slider,
 } from '@mui/material';
 import {
   AutoAwesome,
@@ -72,7 +71,6 @@ export default function ScriptPage() {
   const [sourceText, setSourceText] = useState('');
   const [generatedScript, setGeneratedScript] = useState('');
   const [duration, setDuration] = useState<ScriptDuration>('5min');
-  const [episodes, setEpisodes] = useState(1);
   const [tone, setTone] = useState<NarrativeTone>('mike_duncan');
   const [additionalPrompt, setAdditionalPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -197,7 +195,6 @@ export default function ScriptPage() {
           videoId,
           sourceText,
           duration,
-          episodes,
           tone,
           additionalPrompt,
         }),
@@ -345,20 +342,6 @@ export default function ScriptPage() {
             ))}
           </Select>
         </FormControl>
-
-        <Box sx={{ width: 150 }}>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Episodes: {episodes}
-          </Typography>
-          <Slider
-            value={episodes}
-            onChange={(_, v) => setEpisodes(v as number)}
-            min={1}
-            max={10}
-            marks
-            valueLabelDisplay="auto"
-          />
-        </Box>
 
         <FormControl sx={{ minWidth: 200 }}>
           <InputLabel>Narrative Tone</InputLabel>
