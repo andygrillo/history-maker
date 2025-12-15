@@ -10,7 +10,7 @@ import {
   MusicNote,
   FileDownload,
 } from '@mui/icons-material';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ZoneType } from '@/types';
 
 interface ZoneTabsProps {
@@ -30,11 +30,17 @@ const zones: { id: ZoneType; label: string; icon: React.ReactElement }[] = [
 export function ZoneTabs({ seriesId }: ZoneTabsProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const videoId = searchParams.get('videoId');
 
   const currentZone = zones.find((zone) => pathname.includes(`/${zone.id}`))?.id || 'planner';
 
   const handleChange = (_: React.SyntheticEvent, newValue: ZoneType) => {
-    router.push(`/series/${seriesId}/${newValue}`);
+    // Preserve videoId when switching tabs (except for planner which shows all videos)
+    const url = newValue === 'planner' || !videoId
+      ? `/series/${seriesId}/${newValue}`
+      : `/series/${seriesId}/${newValue}?videoId=${videoId}`;
+    router.push(url);
   };
 
   return (

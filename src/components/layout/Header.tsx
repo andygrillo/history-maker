@@ -93,12 +93,15 @@ export function Header({ seriesTitle, videoTitle }: HeaderProps) {
             <Typography
               variant="subtitle1"
               sx={{
-                fontWeight: 500,
-                color: 'text.secondary',
+                fontWeight: 600,
                 maxWidth: 250,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
+                background: 'linear-gradient(135deg, #6366f1 0%, #ec4899 100%)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
               }}
             >
               {videoTitle}
