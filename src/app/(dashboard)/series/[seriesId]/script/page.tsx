@@ -66,7 +66,6 @@ export default function ScriptPage() {
   const searchParams = useSearchParams();
   const seriesId = params.seriesId as string;
   const videoId = searchParams.get('videoId');
-  const supabase = createClient();
 
   const [video, setVideo] = useState<Video | null>(null);
   const [inputMode, setInputMode] = useState<InputMode>('write');
@@ -89,6 +88,7 @@ export default function ScriptPage() {
     async function loadVideo() {
       if (!videoId) return;
 
+      const supabase = createClient();
       const { data } = await supabase
         .from('videos')
         .select('*')
@@ -100,7 +100,7 @@ export default function ScriptPage() {
       }
     }
     loadVideo();
-  }, [videoId, supabase]);
+  }, [videoId]);
 
   const handleWikipediaSearch = async () => {
     if (!wikiSearch.trim()) return;

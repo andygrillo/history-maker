@@ -16,13 +16,13 @@ export default function SeriesLayout({ children }: SeriesLayoutProps) {
   const searchParams = useSearchParams();
   const seriesId = params.seriesId as string;
   const videoId = searchParams.get('videoId');
-  const supabase = createClient();
 
   const [seriesTopic, setSeriesTopic] = useState<string>('');
   const [videoTitle, setVideoTitle] = useState<string>('');
 
   useEffect(() => {
     async function loadSeries() {
+      const supabase = createClient();
       const { data: series } = await supabase
         .from('series')
         .select('topic')
@@ -34,7 +34,7 @@ export default function SeriesLayout({ children }: SeriesLayoutProps) {
       }
     }
     loadSeries();
-  }, [seriesId, supabase]);
+  }, [seriesId]);
 
   useEffect(() => {
     async function loadVideo() {
@@ -43,6 +43,7 @@ export default function SeriesLayout({ children }: SeriesLayoutProps) {
         return;
       }
 
+      const supabase = createClient();
       const { data: video } = await supabase
         .from('videos')
         .select('title')
@@ -54,7 +55,7 @@ export default function SeriesLayout({ children }: SeriesLayoutProps) {
       }
     }
     loadVideo();
-  }, [videoId, supabase]);
+  }, [videoId]);
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
