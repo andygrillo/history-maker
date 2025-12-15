@@ -475,48 +475,55 @@ export default function ScriptPage() {
                   bgcolor: 'background.default',
                 }}
               >
-                {generatedScript.split('\n').map((line, index) => (
-                  <Box
-                    key={index}
-                    sx={{
-                      display: 'flex',
-                      borderBottom: '1px solid',
-                      borderColor: 'divider',
-                      '&:hover': { bgcolor: 'action.hover' },
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        minWidth: 40,
-                        px: 1,
-                        py: 0.75,
-                        bgcolor: 'action.selected',
-                        color: 'text.secondary',
-                        fontFamily: 'monospace',
-                        fontSize: '0.8rem',
-                        textAlign: 'right',
-                        borderRight: '1px solid',
-                        borderColor: 'divider',
-                        userSelect: 'none',
-                      }}
-                    >
-                      {line.trim() ? index + 1 : ''}
-                    </Box>
-                    <Box
-                      sx={{
-                        flex: 1,
-                        px: 2,
-                        py: 0.75,
-                        fontFamily: 'monospace',
-                        fontSize: '0.9rem',
-                        lineHeight: 1.6,
-                        minHeight: line.trim() ? 'auto' : '1.5em',
-                      }}
-                    >
-                      {line || '\u00A0'}
-                    </Box>
-                  </Box>
-                ))}
+                {(() => {
+                  let sentenceNum = 0;
+                  return generatedScript.split('\n').map((line, index) => {
+                    const hasContent = line.trim();
+                    if (hasContent) sentenceNum++;
+                    return (
+                      <Box
+                        key={index}
+                        sx={{
+                          display: 'flex',
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                          '&:hover': { bgcolor: 'action.hover' },
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            minWidth: 40,
+                            px: 1,
+                            py: 0.75,
+                            bgcolor: 'action.selected',
+                            color: 'text.secondary',
+                            fontFamily: 'monospace',
+                            fontSize: '0.8rem',
+                            textAlign: 'right',
+                            borderRight: '1px solid',
+                            borderColor: 'divider',
+                            userSelect: 'none',
+                          }}
+                        >
+                          {hasContent ? sentenceNum : ''}
+                        </Box>
+                        <Box
+                          sx={{
+                            flex: 1,
+                            px: 2,
+                            py: 0.75,
+                            fontFamily: 'monospace',
+                            fontSize: '0.9rem',
+                            lineHeight: 1.6,
+                            minHeight: hasContent ? 'auto' : '1.5em',
+                          }}
+                        >
+                          {line || '\u00A0'}
+                        </Box>
+                      </Box>
+                    );
+                  });
+                })()}
               </Paper>
 
               {/* Edit mode toggle */}
