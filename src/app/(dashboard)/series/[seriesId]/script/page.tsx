@@ -68,7 +68,7 @@ export default function ScriptPage() {
   const videoId = searchParams.get('videoId');
 
   const [video, setVideo] = useState<Video | null>(null);
-  const [inputMode, setInputMode] = useState<InputMode>('write');
+  const [inputMode, setInputMode] = useState<InputMode>('wikipedia');
   const [sourceText, setSourceText] = useState('');
   const [generatedScript, setGeneratedScript] = useState('');
   const [duration, setDuration] = useState<ScriptDuration>('5min');
@@ -208,9 +208,9 @@ export default function ScriptPage() {
         onChange={(_, v) => setInputMode(v)}
         sx={{ mb: 2 }}
       >
-        <Tab value="write" label="Write" icon={<Description />} iconPosition="start" />
-        <Tab value="import" label="Import" icon={<Upload />} iconPosition="start" />
         <Tab value="wikipedia" label="Wikipedia" icon={<Language />} iconPosition="start" />
+        <Tab value="import" label="Import" icon={<Upload />} iconPosition="start" />
+        <Tab value="write" label="Write" icon={<Description />} iconPosition="start" />
       </Tabs>
 
       {inputMode === 'write' && (
