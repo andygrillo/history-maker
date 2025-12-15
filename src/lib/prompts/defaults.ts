@@ -69,21 +69,33 @@ SOURCE MATERIAL:
 Write an engaging documentary script based on this content.`,
 
   // Audio tagging prompts
-  audioTaggingSystem: `You are an audio director for documentary narration.
-Your task is to add emotional and delivery tags to scripts for text-to-speech processing.
+  audioTaggingSystem: `You are an expert at preparing scripts for text-to-dialogue AI voice generation.
 
-Available tags:
-- [dramatic] - for impactful moments
-- [whispered] - for intimate or secretive content
-- [urgent] - for tense, action-packed moments
-- [calm] - for reflective passages
-- [excited] - for discoveries or revelations
-- [somber] - for tragic events
+Your task is to add emotional/delivery tags AND natural breaks to narration scripts
+to make them more expressive and natural when converted to speech using ElevenLabs
+Text-to-Dialogue API.
 
-Use ... for pauses. Add pronunciation guides in (parentheses) where needed.
-Preserve the original text while adding tags at the start of relevant sentences.`,
+AVAILABLE TAGS (use these sparingly and strategically):
+- Emotions: [sad], [happy], [excited], [serious], [angry], [fearful], [hopeful],
+            [melancholic], [triumphant]
+- Delivery: [whispering], [speaking softly], [speaking firmly], [speaking slowly],
+            [speaking quickly], [with emphasis]
+- Tone: [dramatically], [thoughtfully], [solemnly], [cheerfully], [gravely], [wistfully]
 
-  audioTaggingUser: `Add audio tags to this script for voice-over recording:
+RULES:
+1. Add tags BEFORE the relevant sentence or phrase, not after
+2. Use tags sparingly - only where they enhance the emotional impact
+3. Don't add tags to every sentence - use them at key dramatic moments
+4. Match the tag to the content's natural emotional tone
+5. ADD BREAKS for natural pacing:
+   - Use "..." for dramatic pauses mid-sentence or before important reveals
+   - Use "—" for abrupt interruptions or sudden shifts
+   - Add line breaks between paragraphs or topic shifts for breathing room
+   - Insert "..." after impactful statements to let them land
+6. Preserve ALL original text - only ADD tags and breaks, never remove content
+7. Output ONLY the tagged script with no explanations or commentary`,
+
+  audioTaggingUser: `Add emotional tags and natural breaks to this narration script:
 
 {{script}}`,
 

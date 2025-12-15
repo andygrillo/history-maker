@@ -29,7 +29,6 @@ import {
   Language,
   Refresh,
   ArrowForward,
-  Save,
   Edit as EditIcon,
 } from '@mui/icons-material';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
@@ -81,6 +80,7 @@ export default function ScriptPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '' });
+  const [isEditingScript, setIsEditingScript] = useState(false);
 
   // Wikipedia search state
   const [wikiSearch, setWikiSearch] = useState('');
@@ -94,18 +94,39 @@ export default function ScriptPage() {
       if (!videoId) return;
 
       const supabase = createClient();
-      const { data } = await supabase
+
+      // Load video
+      const { data: videoData } = await supabase
         .from('videos')
         .select('*')
         .eq('id', videoId)
         .single();
 
-      if (data) {
-        setVideo(data as Video);
-        setWikiSearch(data.title || '');
-        // Load existing script if available
-        if (data.script) {
-          setGeneratedScript(data.script);
+      if (videoData) {
+        setVideo(videoData as Video);
+        setWikiSearch(videoData.title || '');
+      }
+
+      // Load existing script if available
+      const { data: scriptData } = await supabase
+        .from('scripts')
+        .select('*')
+        .eq('video_id', videoId)
+        .single();
+
+      if (scriptData) {
+        if (scriptData.generated_script) {
+          setGeneratedScript(scriptData.generated_script);
+        }
+        if (scriptData.source_text) {
+          setSourceText(scriptData.source_text);
+          setSourceMode('write');
+        }
+        if (scriptData.duration) {
+          setDuration(scriptData.duration as ScriptDuration);
+        }
+        if (scriptData.tone) {
+          setTone(scriptData.tone as NarrativeTone);
         }
       }
     }
@@ -219,29 +240,53 @@ export default function ScriptPage() {
     }
   };
 
-  const handleSaveScript = async () => {
-    if (!videoId || !generatedScript) return;
+  const handleProceedToAudio = async () => {
+    if (!generatedScript || !videoId) return;
 
     setIsSaving(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase
-        .from('videos')
-        .update({ script: generatedScript })
-        .eq('id', videoId);
 
-      if (error) throw error;
-      setSnackbar({ open: true, message: 'Script saved successfully' });
+      // Check if script record exists
+      const { data: existingScript } = await supabase
+        .from('scripts')
+        .select('id')
+        .eq('video_id', videoId)
+        .single();
+
+      if (existingScript) {
+        // Update existing script
+        const { error } = await supabase
+          .from('scripts')
+          .update({
+            generated_script: generatedScript,
+            source_text: sourceText,
+            duration,
+            tone,
+          })
+          .eq('video_id', videoId);
+
+        if (error) throw error;
+      } else {
+        // Insert new script record
+        const { error } = await supabase
+          .from('scripts')
+          .insert({
+            video_id: videoId,
+            generated_script: generatedScript,
+            source_text: sourceText,
+            duration,
+            tone,
+          });
+
+        if (error) throw error;
+      }
+
+      // Navigate after successful save
+      router.push(`/series/${seriesId}/audio?videoId=${videoId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save script');
-    } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleProceedToAudio = () => {
-    if (generatedScript && videoId) {
-      router.push(`/series/${seriesId}/audio?videoId=${videoId}`);
     }
   };
 
@@ -467,7 +512,15 @@ export default function ScriptPage() {
           {mainTab === 'script' && (
             <Box>
               {/* Top toolbar */}
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mb: 2 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<EditIcon />}
+                  onClick={() => setIsEditingScript(!isEditingScript)}
+                >
+                  {isEditingScript ? 'Done Editing' : 'Edit'}
+                </Button>
                 <Button
                   variant="outlined"
                   size="small"
@@ -479,65 +532,83 @@ export default function ScriptPage() {
                 </Button>
               </Box>
 
-              {/* Numbered script display */}
-              <Paper
-                variant="outlined"
-                sx={{
-                  maxHeight: '50vh',
-                  overflow: 'auto',
-                  bgcolor: 'background.default',
-                }}
-              >
-                {(() => {
-                  let sentenceNum = 0;
-                  return generatedScript.split('\n').map((line, index) => {
-                    const hasContent = line.trim();
-                    if (hasContent) sentenceNum++;
-                    return (
-                      <Box
-                        key={index}
-                        sx={{
-                          display: 'flex',
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
-                          '&:hover': { bgcolor: 'action.hover' },
-                        }}
-                      >
+              {/* Editable textarea or numbered display */}
+              {isEditingScript ? (
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={16}
+                  value={generatedScript}
+                  onChange={(e) => setGeneratedScript(e.target.value)}
+                  variant="outlined"
+                  sx={{
+                    '& .MuiInputBase-input': {
+                      fontFamily: 'monospace',
+                      fontSize: '0.9rem',
+                      lineHeight: 1.6,
+                    },
+                  }}
+                />
+              ) : (
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    maxHeight: '50vh',
+                    overflow: 'auto',
+                    bgcolor: 'background.default',
+                  }}
+                >
+                  {(() => {
+                    let sentenceNum = 0;
+                    return generatedScript.split('\n').map((line, index) => {
+                      const hasContent = line.trim();
+                      if (hasContent) sentenceNum++;
+                      return (
                         <Box
+                          key={index}
                           sx={{
-                            minWidth: 40,
-                            px: 1,
-                            py: 0.75,
-                            bgcolor: 'action.selected',
-                            color: 'text.secondary',
-                            fontFamily: 'monospace',
-                            fontSize: '0.8rem',
-                            textAlign: 'right',
-                            borderRight: '1px solid',
+                            display: 'flex',
+                            borderBottom: '1px solid',
                             borderColor: 'divider',
-                            userSelect: 'none',
+                            '&:hover': { bgcolor: 'action.hover' },
                           }}
                         >
-                          {hasContent ? sentenceNum : ''}
+                          <Box
+                            sx={{
+                              minWidth: 40,
+                              px: 1,
+                              py: 0.75,
+                              bgcolor: 'action.selected',
+                              color: 'text.secondary',
+                              fontFamily: 'monospace',
+                              fontSize: '0.8rem',
+                              textAlign: 'right',
+                              borderRight: '1px solid',
+                              borderColor: 'divider',
+                              userSelect: 'none',
+                            }}
+                          >
+                            {hasContent ? sentenceNum : ''}
+                          </Box>
+                          <Box
+                            sx={{
+                              flex: 1,
+                              px: 2,
+                              py: 0.75,
+                              fontFamily: 'monospace',
+                              fontSize: '0.9rem',
+                              lineHeight: 1.6,
+                              minHeight: hasContent ? 'auto' : '1.5em',
+                            }}
+                          >
+                            {line || '\u00A0'}
+                          </Box>
                         </Box>
-                        <Box
-                          sx={{
-                            flex: 1,
-                            px: 2,
-                            py: 0.75,
-                            fontFamily: 'monospace',
-                            fontSize: '0.9rem',
-                            lineHeight: 1.6,
-                            minHeight: hasContent ? 'auto' : '1.5em',
-                          }}
-                        >
-                          {line || '\u00A0'}
-                        </Box>
-                      </Box>
-                    );
-                  });
-                })()}
-              </Paper>
+                      );
+                    });
+                  })()}
+                </Paper>
+              )}
 
               {/* Bottom actions */}
               <Box sx={{ display: 'flex', gap: 2, mt: 3, justifyContent: 'space-between' }}>
@@ -548,23 +619,14 @@ export default function ScriptPage() {
                   Back to Source
                 </Button>
 
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Button
-                    variant="outlined"
-                    startIcon={isSaving ? <CircularProgress size={16} /> : <Save />}
-                    onClick={handleSaveScript}
-                    disabled={isSaving}
-                  >
-                    Save
-                  </Button>
-                  <Button
-                    variant="contained"
-                    endIcon={<ArrowForward />}
-                    onClick={handleProceedToAudio}
-                  >
-                    Proceed to Audio
-                  </Button>
-                </Box>
+                <Button
+                  variant="contained"
+                  endIcon={isSaving ? <CircularProgress size={16} /> : <ArrowForward />}
+                  onClick={handleProceedToAudio}
+                  disabled={isSaving}
+                >
+                  {isSaving ? 'Saving...' : 'Save & Proceed to Audio'}
+                </Button>
               </Box>
 
               {error && (
