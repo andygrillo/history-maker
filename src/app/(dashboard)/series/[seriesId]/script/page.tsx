@@ -466,11 +466,24 @@ export default function ScriptPage() {
           {/* Final Script Tab */}
           {mainTab === 'script' && (
             <Box>
+              {/* Top toolbar */}
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={isGenerating ? <CircularProgress size={14} /> : <Refresh />}
+                  onClick={handleGenerateScript}
+                  disabled={isGenerating || !sourceText.trim()}
+                >
+                  Regenerate
+                </Button>
+              </Box>
+
               {/* Numbered script display */}
               <Paper
                 variant="outlined"
                 sx={{
-                  maxHeight: '60vh',
+                  maxHeight: '50vh',
                   overflow: 'auto',
                   bgcolor: 'background.default',
                 }}
@@ -526,44 +539,14 @@ export default function ScriptPage() {
                 })()}
               </Paper>
 
-              {/* Edit mode toggle */}
-              <Box sx={{ mt: 2 }}>
-                <TextField
-                  fullWidth
-                  multiline
-                  value={generatedScript}
-                  onChange={(e) => setGeneratedScript(e.target.value)}
-                  variant="outlined"
-                  label="Edit Script"
-                  sx={{
-                    '& .MuiInputBase-root': {
-                      fontFamily: 'monospace',
-                      fontSize: '0.85rem',
-                      lineHeight: 1.6,
-                    },
-                  }}
-                  minRows={8}
-                />
-              </Box>
-
+              {/* Bottom actions */}
               <Box sx={{ display: 'flex', gap: 2, mt: 3, justifyContent: 'space-between' }}>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<Refresh />}
-                    onClick={() => setMainTab('source')}
-                  >
-                    Edit Source
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    startIcon={isGenerating ? <CircularProgress size={16} /> : <Refresh />}
-                    onClick={handleGenerateScript}
-                    disabled={isGenerating || !sourceText.trim()}
-                  >
-                    Regenerate
-                  </Button>
-                </Box>
+                <Button
+                  variant="outlined"
+                  onClick={() => setMainTab('source')}
+                >
+                  Back to Source
+                </Button>
 
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <Button
@@ -572,7 +555,7 @@ export default function ScriptPage() {
                     onClick={handleSaveScript}
                     disabled={isSaving}
                   >
-                    Save Script
+                    Save
                   </Button>
                   <Button
                     variant="contained"
