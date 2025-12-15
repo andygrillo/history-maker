@@ -18,7 +18,6 @@ import {
   ListItem,
   ListItemButton,
   ListItemText,
-  Paper,
 } from '@mui/material';
 import {
   AutoAwesome,
@@ -57,7 +56,7 @@ const tones: { value: NarrativeTone; label: string; description: string }[] = [
   },
 ];
 
-type InputMode = 'write' | 'import' | 'wikipedia';
+type InputMode = 'write' | 'wikipedia';
 
 export default function ScriptPage() {
   const router = useRouter();
@@ -238,7 +237,6 @@ export default function ScriptPage() {
         sx={{ mb: 2 }}
       >
         <Tab value="wikipedia" label="Wikipedia" icon={<Language />} iconPosition="start" />
-        <Tab value="import" label="Import" icon={<Upload />} iconPosition="start" />
         <Tab value="write" label="Write" icon={<Description />} iconPosition="start" />
       </Tabs>
 
@@ -253,30 +251,37 @@ export default function ScriptPage() {
             onChange={(e) => setSourceText(e.target.value)}
             variant="outlined"
           />
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', textAlign: 'right' }}>
-            {sourceText.trim() ? sourceText.trim().split(/\s+/).length.toLocaleString() : 0} words
-          </Typography>
+          <Box sx={{ mt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Button
+              component="label"
+              size="small"
+              startIcon={<Upload />}
+              sx={{ color: 'text.secondary' }}
+            >
+              Import file
+              <input
+                type="file"
+                hidden
+                accept=".txt,.md"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      const text = event.target?.result as string;
+                      setSourceText(text);
+                    };
+                    reader.readAsText(file);
+                  }
+                  e.target.value = '';
+                }}
+              />
+            </Button>
+            <Typography variant="caption" color="text.secondary">
+              {sourceText.trim() ? sourceText.trim().split(/\s+/).length.toLocaleString() : 0} words
+            </Typography>
+          </Box>
         </Box>
-      )}
-
-      {inputMode === 'import' && (
-        <Paper
-          variant="outlined"
-          sx={{
-            p: 4,
-            textAlign: 'center',
-            borderStyle: 'dashed',
-            cursor: 'pointer',
-          }}
-        >
-          <Upload sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-          <Typography color="text.secondary">
-            Drag & drop a document or click to browse
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            Supports .txt, .md, .doc, .docx
-          </Typography>
-        </Paper>
       )}
 
       {inputMode === 'wikipedia' && (
