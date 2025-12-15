@@ -82,6 +82,7 @@ export default function ScriptPage() {
   const [wikiSearch, setWikiSearch] = useState('');
   const [wikiResults, setWikiResults] = useState<WikipediaArticle[]>([]);
   const [searchingWiki, setSearchingWiki] = useState(false);
+  const [searchStatus, setSearchStatus] = useState('');
 
   // Fetch video data on mount
   useEffect(() => {
@@ -97,6 +98,8 @@ export default function ScriptPage() {
 
       if (data) {
         setVideo(data as Video);
+        // Auto-populate wiki search with video title
+        setWikiSearch(data.title || '');
       }
     }
     loadVideo();
@@ -107,20 +110,49 @@ export default function ScriptPage() {
 
     setSearchingWiki(true);
     setError(null);
+    setWikiResults([]);
 
     try {
-      const response = await fetch('/api/wikipedia/search', {
+      // Step 1: Generate keywords using Haiku
+      setSearchStatus('Generating search keywords...');
+      const keywordsResponse = await fetch('/api/wikipedia/keywords', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: wikiSearch }),
+        body: JSON.stringify({ title: wikiSearch }),
       });
 
-      if (!response.ok) throw new Error('Failed to search Wikipedia');
+      if (!keywordsResponse.ok) throw new Error('Failed to generate keywords');
 
-      const data = await response.json();
-      setWikiResults(data.articles);
+      const { keywords } = await keywordsResponse.json();
+
+      // Step 2: Search Wikipedia with each keyword and combine results
+      setSearchStatus('Searching Wikipedia...');
+      const allArticles: WikipediaArticle[] = [];
+      const seenPageIds = new Set<number>();
+
+      for (const keyword of keywords) {
+        const response = await fetch('/api/wikipedia/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: keyword }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          for (const article of data.articles || []) {
+            if (!seenPageIds.has(article.pageid)) {
+              seenPageIds.add(article.pageid);
+              allArticles.push(article);
+            }
+          }
+        }
+      }
+
+      setWikiResults(allArticles);
+      setSearchStatus('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to search Wikipedia');
+      setSearchStatus('');
     } finally {
       setSearchingWiki(false);
     }
@@ -250,19 +282,27 @@ export default function ScriptPage() {
           <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
             <TextField
               fullWidth
-              placeholder="Search Wikipedia (e.g., 'Haitian Revolution')"
+              placeholder="Video title for Wikipedia search"
               value={wikiSearch}
               onChange={(e) => setWikiSearch(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleWikipediaSearch()}
+              onKeyDown={(e) => e.key === 'Enter' && handleWikipediaSearch()}
+              disabled={searchingWiki}
             />
             <Button
               variant="contained"
               onClick={handleWikipediaSearch}
-              disabled={searchingWiki}
+              disabled={searchingWiki || !wikiSearch.trim()}
+              sx={{ minWidth: 100 }}
             >
               {searchingWiki ? <CircularProgress size={20} /> : 'Search'}
             </Button>
           </Box>
+
+          {searchStatus && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {searchStatus}
+            </Typography>
+          )}
 
           {wikiResults.length > 0 && (
             <List dense>
