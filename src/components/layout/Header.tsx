@@ -7,7 +7,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 
-export function Header() {
+interface HeaderProps {
+  seriesTitle?: string;
+}
+
+export function Header({ seriesTitle }: HeaderProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const router = useRouter();
   const supabase = createClient();
@@ -62,6 +66,25 @@ export function Header() {
         >
           All Series
         </Button>
+
+        {seriesTitle && (
+          <>
+            <Typography sx={{ mx: 1, color: 'text.disabled' }}>/</Typography>
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: 500,
+                color: 'text.primary',
+                maxWidth: 300,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {seriesTitle}
+            </Typography>
+          </>
+        )}
 
         <Box sx={{ flexGrow: 1 }} />
 

@@ -20,7 +20,7 @@ import {
   IconButton,
   DialogContentText,
 } from '@mui/material';
-import { Add, VideoLibrary, Delete } from '@mui/icons-material';
+import { Add, VideoLibrary, Delete, Casino } from '@mui/icons-material';
 import { useRouter } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { createClient } from '@/lib/supabase/client';
@@ -45,6 +45,7 @@ export default function DashboardPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [seriesToDelete, setSeriesToDelete] = useState<SeriesWithCount | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isLoadingLucky, setIsLoadingLucky] = useState(false);
 
   useEffect(() => {
     loadSeries();
@@ -88,6 +89,21 @@ export default function DashboardPage() {
     setIsLoading(false);
   }
 
+  async function handleFeelingLucky() {
+    setIsLoadingLucky(true);
+    try {
+      const response = await fetch('/api/planner/lucky', { method: 'POST' });
+      if (response.ok) {
+        const data = await response.json();
+        setNewTopic(data.topic);
+      }
+    } catch (err) {
+      console.error('Failed to generate topic:', err);
+    } finally {
+      setIsLoadingLucky(false);
+    }
+  }
+
   async function handleCreateSeries() {
     if (!newTopic.trim()) return;
 
@@ -112,7 +128,7 @@ export default function DashboardPage() {
     setNewTopic('');
     setIsCreating(false);
 
-    // Navigate to the new series
+    // Navigate to the new series planner page
     router.push(`/series/${newSeries.id}/planner`);
   }
 
@@ -248,16 +264,26 @@ export default function DashboardPage() {
         <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
           <DialogTitle>Create New Series</DialogTitle>
           <DialogContent>
-            <TextField
-              autoFocus
-              fullWidth
-              label="Series Topic"
-              placeholder="e.g., The French Revolution, Ancient Rome, World War II"
-              value={newTopic}
-              onChange={(e) => setNewTopic(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleCreateSeries()}
-              sx={{ mt: 1 }}
-            />
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 1 }}>
+              <TextField
+                autoFocus
+                fullWidth
+                multiline
+                minRows={1}
+                maxRows={3}
+                placeholder="e.g., The French Revolution, Ancient Rome, World War II"
+                value={newTopic}
+                onChange={(e) => setNewTopic(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleCreateSeries()}
+              />
+              <IconButton
+                onClick={handleFeelingLucky}
+                disabled={isLoadingLucky}
+                sx={{ border: 1, borderColor: 'divider', flexShrink: 0 }}
+              >
+                {isLoadingLucky ? <CircularProgress size={20} /> : <Casino />}
+              </IconButton>
+            </Box>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setDialogOpen(false)}>Cancel</Button>

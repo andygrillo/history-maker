@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Box, Typography, Container } from '@mui/material';
+import { Box } from '@mui/material';
 import { useParams } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { ZoneTabs } from '@/components/layout/ZoneTabs';
@@ -35,12 +35,7 @@ export default function SeriesLayout({ children }: SeriesLayoutProps) {
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
-      <Header />
-      <Container sx={{ pt: 2, pb: 1 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          {seriesTopic || 'Loading...'}
-        </Typography>
-      </Container>
+      <Header seriesTitle={seriesTopic} />
       <ZoneTabs seriesId={seriesId} />
       <Box component="main">
         {children}

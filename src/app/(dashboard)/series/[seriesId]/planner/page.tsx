@@ -20,6 +20,7 @@ import {
   Grid,
   CircularProgress,
   Alert,
+  IconButton,
 } from '@mui/material';
 import { AutoAwesome, Refresh, ArrowForward, Casino } from '@mui/icons-material';
 import { useRouter, useParams } from 'next/navigation';
@@ -199,16 +200,14 @@ export default function PlannerPage() {
         size="small"
         disabled={isLoadingTopic}
       />
-      <Button
-        variant="outlined"
-        size="small"
+      <IconButton
         onClick={handleFeelingLucky}
         disabled={isLoadingLucky || isLoadingTopic}
-        startIcon={isLoadingLucky ? <CircularProgress size={14} /> : <Casino />}
-        sx={{ whiteSpace: 'nowrap' }}
+        size="small"
+        sx={{ border: 1, borderColor: 'divider' }}
       >
-        Lucky
-      </Button>
+        {isLoadingLucky ? <CircularProgress size={18} /> : <Casino />}
+      </IconButton>
     </Box>
   );
 
