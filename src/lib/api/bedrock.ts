@@ -173,11 +173,16 @@ export async function generateScript(
 
 Example of the style:
 "So we left off last time with the final disintegration of the Estates General and the King's order for all three Estates to come together under this self-declared thing, the National Assembly. As will often be the case over the next few years, many observers at the time thought that this moment would mark the end of the Revolution... Little did they know that this supposed finish line was about to be reduced to a mere footnote in history, because just two weeks later the Paris mobs went nuts and stormed the Bastille—and that sort of became the 'it' event of the summer."`,
-    mark_felton: `Write in the style of Mark Felton:
-- Direct, military precision in language
-- Fact-dense delivery with specific dates and numbers
-- Minimal editorializing
-- Clear, concise sentences`,
+    mark_felton: `Write in the style of Mark Felton from Mark Felton Productions:
+- Direct, factual, authoritative tone
+- Begin with a compelling question or statement about the subject
+- Provide detailed biographical or historical context
+- Use precise dates, names, ranks, and positions
+- Build a narrative through chronological progression
+- Matter-of-fact delivery without dramatic embellishment
+
+Example of the style:
+"So, who was Martin Borman? Born in 1900, he had served in the artillery at the tail end of World War I, leaving the Army in 1919. An estate manager during the Weimar Republic period, he joined a paramilitary Freikorps unit of disgruntled right-wing soldiers. An accomplice to a political murder in 1924, Borman served a year in prison. Released in 1925, he went on to join the Nazi party two years later... After Hitler came to power in 1933, Borman was appointed Chief of Staff to Deputy Führer Rudolph Hess and given the rank of Reichsleiter, the highest political rank in the NSDAP."`,
   };
 
   const system = `You are a documentary scriptwriter specializing in history content.
