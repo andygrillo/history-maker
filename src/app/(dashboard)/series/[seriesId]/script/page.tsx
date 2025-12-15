@@ -466,21 +466,78 @@ export default function ScriptPage() {
           {/* Final Script Tab */}
           {mainTab === 'script' && (
             <Box>
-              <TextField
-                fullWidth
-                multiline
-                value={generatedScript}
-                onChange={(e) => setGeneratedScript(e.target.value)}
+              {/* Numbered script display */}
+              <Paper
                 variant="outlined"
                 sx={{
-                  '& .MuiInputBase-root': {
-                    fontFamily: 'monospace',
-                    fontSize: '0.9rem',
-                    lineHeight: 1.8,
-                  },
+                  maxHeight: '60vh',
+                  overflow: 'auto',
+                  bgcolor: 'background.default',
                 }}
-                minRows={15}
-              />
+              >
+                {generatedScript.split('\n').map((line, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      display: 'flex',
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      '&:hover': { bgcolor: 'action.hover' },
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        minWidth: 40,
+                        px: 1,
+                        py: 0.75,
+                        bgcolor: 'action.selected',
+                        color: 'text.secondary',
+                        fontFamily: 'monospace',
+                        fontSize: '0.8rem',
+                        textAlign: 'right',
+                        borderRight: '1px solid',
+                        borderColor: 'divider',
+                        userSelect: 'none',
+                      }}
+                    >
+                      {line.trim() ? index + 1 : ''}
+                    </Box>
+                    <Box
+                      sx={{
+                        flex: 1,
+                        px: 2,
+                        py: 0.75,
+                        fontFamily: 'monospace',
+                        fontSize: '0.9rem',
+                        lineHeight: 1.6,
+                        minHeight: line.trim() ? 'auto' : '1.5em',
+                      }}
+                    >
+                      {line || '\u00A0'}
+                    </Box>
+                  </Box>
+                ))}
+              </Paper>
+
+              {/* Edit mode toggle */}
+              <Box sx={{ mt: 2 }}>
+                <TextField
+                  fullWidth
+                  multiline
+                  value={generatedScript}
+                  onChange={(e) => setGeneratedScript(e.target.value)}
+                  variant="outlined"
+                  label="Edit Script"
+                  sx={{
+                    '& .MuiInputBase-root': {
+                      fontFamily: 'monospace',
+                      fontSize: '0.85rem',
+                      lineHeight: 1.6,
+                    },
+                  }}
+                  minRows={8}
+                />
+              </Box>
 
               <Box sx={{ display: 'flex', gap: 2, mt: 3, justifyContent: 'space-between' }}>
                 <Box sx={{ display: 'flex', gap: 1 }}>

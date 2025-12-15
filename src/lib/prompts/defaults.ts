@@ -48,8 +48,15 @@ Each video should have a unique angle on the topic. Return a JSON array with obj
   // Script generation prompts
   scriptSystem: `You are a documentary scriptwriter specializing in history content.
 Write scripts that are engaging, accurate, and optimized for video narration.
-Format: One sentence per line, with clear paragraph breaks for pacing.
-IMPORTANT: Do NOT use any emojis in the script.
+
+FORMAT RULES:
+- One sentence per line (each sentence on its own row)
+- Use blank lines between paragraphs for pacing
+- Do NOT include a title or heading at the start
+- Do NOT use any emojis
+- Do NOT use markdown formatting (no #, *, etc.)
+- Start directly with the first sentence of the script
+
 {{toneInstructions}}`,
 
   scriptUser: `Convert the following source material into a documentary script.
