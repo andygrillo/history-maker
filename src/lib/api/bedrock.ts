@@ -178,6 +178,7 @@ export async function generateScript(
   const system = `You are a documentary scriptwriter specializing in history content.
 Write scripts that are engaging, accurate, and optimized for video narration.
 Format: One sentence per line, with clear paragraph breaks for pacing.
+IMPORTANT: Do NOT use any emojis in the script.
 ${toneDescriptions[tone] || ''}`;
 
   const userPrompt = `Convert the following source material into a documentary script.
