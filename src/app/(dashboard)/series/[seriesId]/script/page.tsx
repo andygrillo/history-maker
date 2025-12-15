@@ -31,7 +31,8 @@ import {
 } from '@mui/icons-material';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { ZoneLayout } from '@/components/layout/ZoneLayout';
-import { ScriptDuration, NarrativeTone, WikipediaArticle } from '@/types';
+import { ScriptDuration, NarrativeTone, WikipediaArticle, Video } from '@/types';
+import { createClient } from '@/lib/supabase/client';
 
 const durations: { value: ScriptDuration; label: string }[] = [
   { value: '30s', label: '30 seconds' },
@@ -65,7 +66,9 @@ export default function ScriptPage() {
   const searchParams = useSearchParams();
   const seriesId = params.seriesId as string;
   const videoId = searchParams.get('videoId');
+  const supabase = createClient();
 
+  const [video, setVideo] = useState<Video | null>(null);
   const [inputMode, setInputMode] = useState<InputMode>('write');
   const [sourceText, setSourceText] = useState('');
   const [generatedScript, setGeneratedScript] = useState('');
@@ -80,6 +83,24 @@ export default function ScriptPage() {
   const [wikiSearch, setWikiSearch] = useState('');
   const [wikiResults, setWikiResults] = useState<WikipediaArticle[]>([]);
   const [searchingWiki, setSearchingWiki] = useState(false);
+
+  // Fetch video data on mount
+  useEffect(() => {
+    async function loadVideo() {
+      if (!videoId) return;
+
+      const { data } = await supabase
+        .from('videos')
+        .select('*')
+        .eq('id', videoId)
+        .single();
+
+      if (data) {
+        setVideo(data as Video);
+      }
+    }
+    loadVideo();
+  }, [videoId, supabase]);
 
   const handleWikipediaSearch = async () => {
     if (!wikiSearch.trim()) return;
@@ -169,6 +190,19 @@ export default function ScriptPage() {
 
   const promptPanel = (
     <Box>
+      {video && (
+        <Box sx={{ mb: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5 }}>
+            {video.title}
+          </Typography>
+          {video.description && (
+            <Typography variant="body2" color="text.secondary">
+              {video.description}
+            </Typography>
+          )}
+        </Box>
+      )}
+
       <Tabs
         value={inputMode}
         onChange={(_, v) => setInputMode(v)}

@@ -9,9 +9,10 @@ import { createClient } from '@/lib/supabase/client';
 
 interface HeaderProps {
   seriesTitle?: string;
+  videoTitle?: string;
 }
 
-export function Header({ seriesTitle }: HeaderProps) {
+export function Header({ seriesTitle, videoTitle }: HeaderProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const router = useRouter();
   const supabase = createClient();
@@ -75,13 +76,32 @@ export function Header({ seriesTitle }: HeaderProps) {
               sx={{
                 fontWeight: 500,
                 color: 'text.primary',
-                maxWidth: 300,
+                maxWidth: 200,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
               }}
             >
               {seriesTitle}
+            </Typography>
+          </>
+        )}
+
+        {videoTitle && (
+          <>
+            <Typography sx={{ mx: 1, color: 'text.disabled' }}>/</Typography>
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: 500,
+                color: 'text.secondary',
+                maxWidth: 250,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {videoTitle}
             </Typography>
           </>
         )}
