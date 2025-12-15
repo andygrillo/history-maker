@@ -506,3 +506,118 @@ interface VideoClip {
 - [ ] Video editor for final assembly
 - [ ] Additional platform formats
 - [ ] Content type expansion beyond history
+
+---
+
+## Implementation Plan
+
+### Project Foundation
+
+**Initialize Project:**
+```bash
+npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*"
+```
+
+**Dependencies:**
+- `@mui/material`, `@emotion/react`, `@emotion/styled`
+- `@supabase/supabase-js`, `@supabase/ssr`
+- `@aws-sdk/client-bedrock-runtime`
+- `zustand`, `@tanstack/react-query`
+- `react-hook-form`, `zod`
+
+---
+
+### Folder Structure
+
+```
+/src
+├── app/
+│   ├── (auth)/login, signup
+│   ├── (dashboard)/
+│   │   ├── project/[projectId]/
+│   │   │   ├── layout.tsx (zone tabs)
+│   │   │   ├── planner/page.tsx
+│   │   │   ├── script/page.tsx
+│   │   │   ├── audio/page.tsx
+│   │   │   ├── image/page.tsx
+│   │   │   ├── video/page.tsx
+│   │   │   ├── music/page.tsx
+│   │   │   └── export/page.tsx
+│   │   └── settings/page.tsx
+│   └── api/ (all AI & external service routes)
+├── components/
+│   ├── layout/ (Header, ZoneTabs, panels)
+│   ├── zones/ (planner/, script/, audio/, etc.)
+│   └── ui/ (shared MUI components)
+├── lib/
+│   ├── supabase/ (client, server, middleware)
+│   ├── api/ (bedrock, elevenlabs, gemini, veo, kling, sora, r2)
+│   └── prompts/ (AI prompt templates)
+├── hooks/ (useProject, useScript, useAudio, etc.)
+├── stores/ (projectStore, videoStore, settingsStore)
+└── types/ (TypeScript interfaces)
+```
+
+---
+
+### Database Schema (Supabase)
+
+| Table | Purpose |
+|-------|---------|
+| `profiles` | User profiles |
+| `user_settings` | Encrypted API keys |
+| `projects` | Topic-based projects |
+| `videos` | Individual videos in project |
+| `scripts` | Source + generated scripts |
+| `audios` | TTS files with timestamps |
+| `visuals` | Image placeholders with tags |
+| `visual_variants` | Multiple images per visual |
+| `video_clips` | Generated video clips |
+| `music_tracks` | Selected music |
+
+---
+
+### Video Generation Models
+
+| Model | Provider | Duration Options |
+|-------|----------|------------------|
+| Veo 3.1 | Google | 4s, 6s, 8s |
+| Veo 3.1 Fast | Google | 4s, 6s, 8s |
+| Kling 2.6 | Kuaishou | 5s, 10s |
+| Sora 2 | OpenAI | 5s, 10s, 15s, 20s |
+
+---
+
+### Build Order
+
+1. **Foundation** - Next.js setup, MUI theme, Supabase auth
+2. **Layout** - Header, ZoneTabs, three-panel structure
+3. **Settings** - API key management
+4. **Planner** - Calendar generation
+5. **Script** - Wikipedia + script gen
+6. **Audio** - ElevenLabs TTS
+7. **Image** - Wikimedia + Gemini
+8. **Video** - Veo/Kling/Sora generation
+9. **Music** - Artlist integration
+10. **Export** - Downloads
+
+---
+
+### Critical Files
+
+| File | Purpose |
+|------|---------|
+| `src/app/(dashboard)/project/[projectId]/layout.tsx` | Zone navigation layout |
+| `src/lib/supabase/server.ts` | Server-side Supabase client |
+| `src/lib/api/bedrock.ts` | AWS Bedrock AI client |
+| `src/lib/api/r2.ts` | Cloudflare R2 storage client |
+| `src/types/index.ts` | All TypeScript definitions |
+
+---
+
+### Technical Notes
+
+- All external API calls through Next.js API routes (security)
+- Video generation is async (up to 6 min) - needs polling
+- Use React Query for caching + background updates
+- Store API keys encrypted in Supabase
