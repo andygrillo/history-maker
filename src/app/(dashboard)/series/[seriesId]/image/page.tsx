@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
-  TextField,
   Button,
   Typography,
   Select,
@@ -12,71 +11,61 @@ import {
   InputLabel,
   CircularProgress,
   Alert,
-  Grid,
-  Card,
-  CardMedia,
-  CardContent,
-  CardActions,
+  TextField,
+  Tooltip,
   Chip,
-  IconButton,
   Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Slider,
-  Tabs,
-  Tab,
+  IconButton,
 } from '@mui/material';
-import {
-  AutoAwesome,
-  Search,
-  Add,
-  Delete,
-  Check,
-  ArrowForward,
-  Image as ImageIcon,
-  FilterAlt,
-} from '@mui/icons-material';
+import { AutoAwesome, ArrowForward, ArrowBack, Search, Check, SkipNext, CloudUpload, Brush, Close } from '@mui/icons-material';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { ZoneLayout } from '@/components/layout/ZoneLayout';
-import { VisualTag, CameraMovement, ImageStyle, ImageFilter } from '@/types';
+import { createClient } from '@/lib/supabase/client';
 
-const cameraMovements: { value: CameraMovement; label: string }[] = [
-  { value: 'drifting_still', label: 'Drifting Still' },
-  { value: 'dolly_in', label: 'Dolly In' },
-  { value: 'dolly_out', label: 'Dolly Out' },
-  { value: 'pan_left', label: 'Pan Left' },
-  { value: 'pan_right', label: 'Pan Right' },
-  { value: 'tilt_up', label: 'Tilt Up' },
-  { value: 'tilt_down', label: 'Tilt Down' },
-  { value: 'zoom_in', label: 'Zoom In' },
-  { value: 'zoom_out', label: 'Zoom Out' },
-];
+// Available visual durations for video clips
+const availableDurations = [4, 6, 8];
 
-const imageStyles: { value: ImageStyle; label: string }[] = [
-  { value: '18th_century_painting', label: '18th Century Painting' },
-  { value: '20th_century_modern', label: '20th Century Modern' },
-  { value: 'map_style', label: 'Map Style' },
-  { value: 'document_style', label: 'Document Style' },
-];
-
-const imageFilters: { value: ImageFilter; label: string; description: string }[] = [
-  { value: 'photorealistic_expand', label: 'Expand to 16:9', description: 'Create photorealistic version' },
-  { value: 'yt_safe', label: 'YT Safe', description: 'Cover nudity for YouTube' },
-  { value: 'map_enhancement', label: 'Map Enhancement', description: 'Optimize map visuals' },
-  { value: 'document_enhancement', label: 'Document Enhancement', description: 'Optimize documents' },
-];
-
-interface ImageVariant {
-  id: string;
-  sourceUrl: string;
-  processedUrl?: string;
-  filters: ImageFilter[];
-  isSelected: boolean;
+// Image option from Wikimedia
+interface ImageOption {
+  url: string;
+  title: string;
+  thumb: string;
+  license?: string;
+  description?: string;
+  artist?: string;
+  date?: string;
+  width?: number;
+  height?: number;
 }
 
-interface Visual extends VisualTag {
-  variants: ImageVariant[];
+// Media type filter
+type MediaType = 'all' | 'paintings' | 'engravings' | 'maps' | 'pre1900';
+
+const mediaTypeOptions: { value: MediaType; label: string }[] = [
+  { value: 'all', label: 'All Types' },
+  { value: 'paintings', label: 'Paintings' },
+  { value: 'engravings', label: 'Engravings' },
+  { value: 'maps', label: 'Maps' },
+  { value: 'pre1900', label: 'Pre-1900' },
+];
+
+// Quality filter
+type QualityFilter = 'all' | 'valued' | 'featured';
+
+const qualityOptions: { value: QualityFilter; label: string }[] = [
+  { value: 'all', label: 'All Quality' },
+  { value: 'valued', label: 'Valued Images' },
+  { value: 'featured', label: 'Featured' },
+];
+
+// Visual item
+interface VisualItem {
+  id: string;
+  number: number;
+  description: string;
+  keywords: string;
+  selectedUrl?: string;
+  selectedThumb?: string;
 }
 
 export default function ImagePage() {
@@ -86,39 +75,119 @@ export default function ImagePage() {
   const seriesId = params.seriesId as string;
   const videoId = searchParams.get('videoId');
 
+  // Script and tagging state
   const [script, setScript] = useState('');
-  const [clipDuration, setClipDuration] = useState(4);
-  const [visuals, setVisuals] = useState<Visual[]>([]);
-  const [selectedVisual, setSelectedVisual] = useState<Visual | null>(null);
+  const [taggedScript, setTaggedScript] = useState('');
+  const [visualDuration, setVisualDuration] = useState(8);
   const [isGeneratingTags, setIsGeneratingTags] = useState(false);
+
+  // Visuals state
+  const [visuals, setVisuals] = useState<VisualItem[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Search state for current visual
+  const [searchQuery, setSearchQuery] = useState('');
+  const [mediaType, setMediaType] = useState<MediaType>('all');
+  const [qualityFilter, setQualityFilter] = useState<QualityFilter>('all');
+  const [searchResults, setSearchResults] = useState<ImageOption[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [isApplyingFilter, setIsApplyingFilter] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  // Drag and drop state
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // AI generation state
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [aiAspectRatio, setAiAspectRatio] = useState<'16:9' | '9:16'>('16:9');
+
   const [error, setError] = useState<string | null>(null);
-  const [searchTab, setSearchTab] = useState(0);
-  const [generationStyle, setGenerationStyle] = useState<ImageStyle>('18th_century_painting');
-  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
-  const [selectedVariant, setSelectedVariant] = useState<ImageVariant | null>(null);
+
+  // Image preview modal state
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  // Ref for script container to scroll to active tag
+  const scriptContainerRef = useRef<HTMLDivElement>(null);
+
+  const currentVisual = visuals[currentIndex];
+
+  // Calculate estimated script duration and number of visuals
+  const getScriptStats = (text: string) => {
+    const cleanText = text.replace(/\(VISUAL \d+:[^)]+\)/g, '');
+    const wordCount = cleanText.split(/\s+/).filter(Boolean).length;
+    const durationSeconds = (wordCount / 150) * 60;
+    const numVisuals = Math.max(1, Math.round(durationSeconds / visualDuration));
+    return { wordCount, durationSeconds, numVisuals };
+  };
+
+  const stats = getScriptStats(script);
 
   // Load script on mount
   useEffect(() => {
     async function loadScript() {
-      if (videoId) {
-        try {
-          const response = await fetch(`/api/scripts/${videoId}`);
-          if (response.ok) {
-            const data = await response.json();
-            setScript(data.generatedScript || '');
-          }
-        } catch (err) {
-          console.error('Failed to load script:', err);
+      if (!videoId) return;
+
+      try {
+        const supabase = createClient();
+
+        const { data: scriptData } = await supabase
+          .from('scripts')
+          .select('generated_script')
+          .eq('video_id', videoId)
+          .single();
+
+        if (scriptData) {
+          setScript(scriptData.generated_script || '');
         }
+      } catch (err) {
+        console.error('Failed to load script:', err);
       }
     }
+
     loadScript();
   }, [videoId]);
 
-  const handleGenerateVisualTags = async () => {
+  // When current visual changes, update search query and reset results
+  useEffect(() => {
+    if (currentVisual) {
+      setSearchQuery(currentVisual.keywords);
+      setSelectedImage(currentVisual.selectedUrl || null);
+      setSearchResults([]);
+
+      // Scroll to the active visual tag in the script
+      setTimeout(() => {
+        const activeTag = scriptContainerRef.current?.querySelector(
+          `[data-visual-number="${currentVisual.number}"]`
+        );
+        if (activeTag) {
+          activeTag.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+  }, [currentIndex, currentVisual]);
+
+  // Parse visual tags from tagged script
+  const parseVisualsFromScript = (text: string): VisualItem[] => {
+    const items: VisualItem[] = [];
+    const tagRegex = /\(VISUAL (\d+):([^|]+)\|([^)]+)\)/g;
+    let match;
+
+    while ((match = tagRegex.exec(text)) !== null) {
+      // Handle both KEYWORD: (singular) and KEYWORDS: (plural) formats
+      const keywordPart = match[3].replace(/KEYWORDS?:/i, '').trim();
+      items.push({
+        id: `visual-${match[1]}`,
+        number: parseInt(match[1]),
+        description: match[2].trim(),
+        keywords: keywordPart,
+      });
+    }
+
+    return items;
+  };
+
+  // Handle auto-tagging
+  const handleAutoTagScript = async () => {
     if (!script.trim()) {
       setError('No script available');
       return;
@@ -126,62 +195,177 @@ export default function ImagePage() {
 
     setIsGeneratingTags(true);
     setError(null);
+    setVisuals([]);
+    setCurrentIndex(0);
 
     try {
-      const response = await fetch('/api/image/generate-tags', {
+      const response = await fetch('/api/image/auto-tag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script, clipDuration }),
+        body: JSON.stringify({
+          script,
+          visualDuration,
+          numVisuals: stats.numVisuals,
+        }),
       });
 
-      if (!response.ok) throw new Error('Failed to generate visual tags');
+      if (!response.ok) throw new Error('Failed to auto-tag script');
 
       const data = await response.json();
-      setVisuals(data.tags.map((tag: VisualTag) => ({ ...tag, variants: [] })));
+      setTaggedScript(data.taggedScript);
+
+      const parsed = parseVisualsFromScript(data.taggedScript);
+      setVisuals(parsed);
+
+      if (parsed.length > 0) {
+        setSearchQuery(parsed[0].keywords);
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate tags');
+      setError(err instanceof Error ? err.message : 'Failed to auto-tag');
     } finally {
       setIsGeneratingTags(false);
     }
   };
 
-  const handleSearchWikimedia = async (visual: Visual) => {
+  // Search Wikimedia
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+
     setIsSearching(true);
-    setSelectedVisual(visual);
     setError(null);
 
     try {
       const response = await fetch('/api/image/search-wikimedia', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keywords: visual.keywords }),
+        body: JSON.stringify({
+          keywords: searchQuery,
+          limit: 20,
+          mediaFilter: mediaType,
+          qualityFilter,
+        }),
       });
 
-      if (!response.ok) throw new Error('Failed to search Wikimedia');
-
       const data = await response.json();
-      const newVariants: ImageVariant[] = data.images.map((img: { url: string; title: string }, i: number) => ({
-        id: `${visual.id}-wiki-${i}`,
-        sourceUrl: img.url,
-        filters: [],
-        isSelected: false,
-      }));
 
-      setVisuals((prev) =>
-        prev.map((v) =>
-          v.id === visual.id ? { ...v, variants: [...v.variants, ...newVariants] } : v
-        )
-      );
+      if (!response.ok) {
+        throw new Error(data.error || 'Search failed');
+      }
+
+      setSearchResults(data.images || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to search');
+      console.error('Search error:', err);
+      setError(err instanceof Error ? err.message : 'Search failed');
     } finally {
       setIsSearching(false);
     }
   };
 
-  const handleGenerateImage = async (visual: Visual) => {
-    setIsGeneratingImage(true);
-    setSelectedVisual(visual);
+  // Select an image
+  const handleSelectImage = (url: string, thumb: string) => {
+    setSelectedImage(url);
+    // Update the visual with selected image
+    setVisuals((prev) =>
+      prev.map((v, idx) =>
+        idx === currentIndex ? { ...v, selectedUrl: url, selectedThumb: thumb } : v
+      )
+    );
+  };
+
+  // Navigate to next visual
+  const handleNext = () => {
+    if (currentIndex < visuals.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+      setSearchResults([]);
+    }
+  };
+
+  // Navigate to previous visual
+  const handlePrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+      setSearchResults([]);
+    }
+  };
+
+  // Skip current visual (no image selected)
+  const handleSkip = () => {
+    setVisuals((prev) =>
+      prev.map((v, idx) =>
+        idx === currentIndex ? { ...v, selectedUrl: undefined, selectedThumb: undefined } : v
+      )
+    );
+    setSelectedImage(null);
+    handleNext();
+  };
+
+  // Handle drag events
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    if (!currentVisual || !videoId) return;
+
+    const files = e.dataTransfer.files;
+    if (files.length === 0) return;
+
+    const file = files[0];
+    if (!file.type.startsWith('image/')) {
+      setError('Please drop an image file');
+      return;
+    }
+
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('videoId', videoId);
+      formData.append('seriesId', seriesId);
+      formData.append('visualNumber', currentVisual.number.toString());
+
+      const response = await fetch('/api/image/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      const data = await response.json();
+
+      // Set the uploaded image as selected
+      setSelectedImage(data.imageUrl);
+      setVisuals((prev) =>
+        prev.map((v, idx) =>
+          idx === currentIndex ? { ...v, selectedUrl: data.imageUrl, selectedThumb: data.imageUrl } : v
+        )
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload image');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Generate AI image
+  const handleGenerateAI = async () => {
+    if (!currentVisual || !videoId) return;
+
+    setIsGenerating(true);
     setError(null);
 
     try {
@@ -189,88 +373,34 @@ export default function ImagePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: visual.description,
-          style: generationStyle,
+          videoId,
+          seriesId,
+          visualNumber: currentVisual.number,
+          description: currentVisual.description,
+          style: '18th_century_painting',
+          aspectRatio: aiAspectRatio,
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to generate image');
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Generation failed');
+      }
 
       const data = await response.json();
-      const newVariant: ImageVariant = {
-        id: `${visual.id}-gen-${Date.now()}`,
-        sourceUrl: data.imageUrl,
-        filters: [],
-        isSelected: false,
-      };
 
+      // Set the generated image as selected
+      setSelectedImage(data.imageUrl);
       setVisuals((prev) =>
-        prev.map((v) =>
-          v.id === visual.id ? { ...v, variants: [...v.variants, newVariant] } : v
+        prev.map((v, idx) =>
+          idx === currentIndex ? { ...v, selectedUrl: data.imageUrl, selectedThumb: data.imageUrl } : v
         )
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate');
+      setError(err instanceof Error ? err.message : 'Failed to generate image');
     } finally {
-      setIsGeneratingImage(false);
+      setIsGenerating(false);
     }
-  };
-
-  const handleApplyFilter = async (filter: ImageFilter) => {
-    if (!selectedVariant) return;
-
-    setIsApplyingFilter(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/image/apply-filter', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageUrl: selectedVariant.processedUrl || selectedVariant.sourceUrl,
-          filter,
-        }),
-      });
-
-      if (!response.ok) throw new Error('Failed to apply filter');
-
-      const data = await response.json();
-
-      setVisuals((prev) =>
-        prev.map((v) => ({
-          ...v,
-          variants: v.variants.map((variant) =>
-            variant.id === selectedVariant.id
-              ? { ...variant, processedUrl: data.imageUrl, filters: [...variant.filters, filter] }
-              : variant
-          ),
-        }))
-      );
-
-      setSelectedVariant((prev) =>
-        prev ? { ...prev, processedUrl: data.imageUrl, filters: [...prev.filters, filter] } : null
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to apply filter');
-    } finally {
-      setIsApplyingFilter(false);
-    }
-  };
-
-  const handleSelectVariant = (visualId: string, variantId: string) => {
-    setVisuals((prev) =>
-      prev.map((v) =>
-        v.id === visualId
-          ? {
-              ...v,
-              variants: v.variants.map((variant) => ({
-                ...variant,
-                isSelected: variant.id === variantId,
-              })),
-            }
-          : v
-      )
-    );
   };
 
   const handleProceedToVideo = () => {
@@ -279,83 +409,315 @@ export default function ImagePage() {
     }
   };
 
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.round(seconds % 60);
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  };
+
+  // Render visual tags with colored highlighting
+  const renderTaggedScript = (text: string) => {
+    if (!text) return null;
+
+    const parts: React.ReactNode[] = [];
+    const tagRegex = /\(VISUAL (\d+):([^|]+)\|([^)]+)\)/g;
+    let lastIndex = 0;
+    let match;
+    let key = 0;
+
+    while ((match = tagRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(<span key={key++}>{text.slice(lastIndex, match.index)}</span>);
+      }
+
+      const visualNum = parseInt(match[1]);
+      const description = match[2].trim();
+      const visual = visuals.find((v) => v.number === visualNum);
+      const isActive = visual && visualNum === currentVisual?.number;
+      const hasImage = visual?.selectedUrl;
+
+      // Color: active = blue, has image = green, no image = grey
+      let bgcolor = 'action.selected';
+      let color = 'text.secondary';
+      if (isActive) {
+        bgcolor = 'primary.main';
+        color = 'primary.contrastText';
+      } else if (hasImage) {
+        bgcolor = 'success.light';
+        color = 'success.contrastText';
+      }
+
+      parts.push(
+        <Box
+          key={key++}
+          component="span"
+          data-visual-number={visualNum}
+          sx={{
+            display: 'inline',
+            bgcolor,
+            color,
+            px: 0.5,
+            py: 0.25,
+            borderRadius: 0.5,
+            fontSize: '0.8rem',
+            mx: 0.5,
+            cursor: 'pointer',
+          }}
+          onClick={() => {
+            const idx = visuals.findIndex((v) => v.number === visualNum);
+            if (idx >= 0) {
+              setCurrentIndex(idx);
+              setSearchResults([]);
+            }
+          }}
+        >
+          VISUAL {visualNum}{hasImage ? ' ✓' : ''}: {description.length > 25 ? description.slice(0, 25) + '...' : description}
+        </Box>
+      );
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(<span key={key++}>{text.slice(lastIndex)}</span>);
+    }
+
+    return parts;
+  };
+
+  // Counts
+  const selectedCount = visuals.filter((v) => v.selectedUrl).length;
+  const totalCount = visuals.length;
+
   const promptPanel = (
     <Box>
-      <TextField
-        fullWidth
-        multiline
-        rows={6}
-        value={script}
-        onChange={(e) => setScript(e.target.value)}
-        placeholder="Script will be loaded from previous zone..."
-        variant="outlined"
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Script with Visual Tags
+          </Typography>
+          {script && (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ bgcolor: 'action.hover', px: 0.75, py: 0.25, borderRadius: 1 }}
+            >
+              ~{formatDuration(stats.durationSeconds)} • {stats.numVisuals} visuals @ {visualDuration}s
+            </Typography>
+          )}
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <FormControl size="small" sx={{ minWidth: 80 }}>
+            <Select
+              value={visualDuration}
+              onChange={(e) => setVisualDuration(e.target.value as number)}
+              size="small"
+              sx={{ height: 32 }}
+            >
+              {availableDurations.map((d: number) => (
+                <MenuItem key={d} value={d}>
+                  {d}s
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={isGeneratingTags ? <CircularProgress size={14} /> : <AutoAwesome />}
+            onClick={handleAutoTagScript}
+            disabled={isGeneratingTags || !script.trim()}
+          >
+            Auto-tag
+          </Button>
+        </Box>
+      </Box>
+      <Box
+        ref={scriptContainerRef}
         sx={{
-          '& .MuiInputBase-root': {
-            fontFamily: 'monospace',
-            fontSize: '0.85rem',
-          },
+          p: 1.5,
+          minHeight: 200,
+          maxHeight: 300,
+          overflow: 'auto',
+          fontFamily: 'monospace',
+          fontSize: '0.85rem',
+          lineHeight: 1.8,
+          whiteSpace: 'pre-wrap',
+          border: 1,
+          borderColor: 'divider',
+          borderRadius: 1,
+          bgcolor: 'action.hover',
         }}
-      />
+      >
+        {taggedScript
+          ? renderTaggedScript(taggedScript)
+          : script || (
+              <Typography color="text.secondary" sx={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                Script will be loaded from previous zone...
+              </Typography>
+            )}
+      </Box>
     </Box>
   );
 
   const configPanel = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      <Box sx={{ display: 'flex', gap: 3, alignItems: 'flex-end' }}>
-        <Box sx={{ width: 200 }}>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            Clip Duration: {clipDuration}s
-          </Typography>
-          <Slider
-            value={clipDuration}
-            onChange={(_, v) => setClipDuration(v as number)}
-            min={2}
-            max={10}
-            marks={[
-              { value: 4, label: '4s' },
-              { value: 6, label: '6s' },
-              { value: 8, label: '8s' },
-            ]}
-            valueLabelDisplay="auto"
-          />
-        </Box>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {visuals.length > 0 && currentVisual && (
+        <>
+          {/* Visual header */}
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="h6">
+                Visual {currentVisual.number} of {totalCount}
+              </Typography>
+              <Chip
+                size="small"
+                label={`${selectedCount}/${totalCount} selected`}
+                color={selectedCount === totalCount ? 'success' : 'default'}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<ArrowBack />}
+                onClick={handlePrev}
+                disabled={currentIndex === 0}
+              >
+                Prev
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                endIcon={<SkipNext />}
+                onClick={handleSkip}
+                disabled={currentIndex === visuals.length - 1}
+              >
+                Skip
+              </Button>
+              <Button
+                size="small"
+                variant="contained"
+                endIcon={<ArrowForward />}
+                onClick={handleNext}
+                disabled={currentIndex === visuals.length - 1}
+              >
+                Next
+              </Button>
+            </Box>
+          </Box>
 
-        <FormControl sx={{ minWidth: 200 }}>
-          <InputLabel>AI Generation Style</InputLabel>
-          <Select
-            value={generationStyle}
-            label="AI Generation Style"
-            onChange={(e) => setGenerationStyle(e.target.value as ImageStyle)}
-          >
-            {imageStyles.map((style) => (
-              <MenuItem key={style.value} value={style.value}>
-                {style.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Box>
+          {/* Visual description */}
+          <Box sx={{ bgcolor: 'action.hover', p: 1.5, borderRadius: 1 }}>
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              {currentVisual.description}
+            </Typography>
+          </Box>
 
-      <Box sx={{ display: 'flex', gap: 2 }}>
+          {/* Search controls */}
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <TextField
+              label="Search Keywords"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              size="small"
+              sx={{ flex: 1, minWidth: 200 }}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            />
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <InputLabel>Type</InputLabel>
+              <Select
+                value={mediaType}
+                label="Type"
+                onChange={(e) => setMediaType(e.target.value as MediaType)}
+              >
+                {mediaTypeOptions.map((opt) => (
+                  <MenuItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <InputLabel>Quality</InputLabel>
+              <Select
+                value={qualityFilter}
+                label="Quality"
+                onChange={(e) => setQualityFilter(e.target.value as QualityFilter)}
+              >
+                {qualityOptions.map((opt) => (
+                  <MenuItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button
+              variant="contained"
+              startIcon={isSearching ? <CircularProgress size={16} /> : <Search />}
+              onClick={handleSearch}
+              disabled={isSearching || !searchQuery.trim()}
+            >
+              Search
+            </Button>
+          </Box>
+
+          {/* AI Generation controls */}
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Typography variant="body2" color="text.secondary">
+              Or generate with AI:
+            </Typography>
+            <FormControl size="small" sx={{ minWidth: 100 }}>
+              <Select
+                value={aiAspectRatio}
+                onChange={(e) => setAiAspectRatio(e.target.value as '16:9' | '9:16')}
+                size="small"
+              >
+                <MenuItem value="16:9">Landscape</MenuItem>
+                <MenuItem value="9:16">Portrait</MenuItem>
+              </Select>
+            </FormControl>
+            <Button
+              variant="outlined"
+              color="secondary"
+              startIcon={isGenerating ? <CircularProgress size={16} /> : <Brush />}
+              onClick={handleGenerateAI}
+              disabled={isGenerating || isSearching}
+            >
+              Generate AI
+            </Button>
+          </Box>
+
+          {/* Selected image indicator */}
+          {selectedImage && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Check color="success" />
+              <Typography variant="body2" color="success.main">
+                Image selected for this visual
+              </Typography>
+            </Box>
+          )}
+        </>
+      )}
+
+      {visuals.length === 0 && (
+        <Typography color="text.secondary">
+          Click Auto-tag to generate visual markers, then search for images one by one.
+        </Typography>
+      )}
+
+      {/* Proceed button */}
+      {selectedCount === totalCount && totalCount > 0 && (
         <Button
           variant="contained"
-          startIcon={isGeneratingTags ? <CircularProgress size={16} /> : <AutoAwesome />}
-          onClick={handleGenerateVisualTags}
-          disabled={isGeneratingTags || !script.trim()}
+          color="success"
+          endIcon={<ArrowForward />}
+          onClick={handleProceedToVideo}
+          sx={{ alignSelf: 'flex-start' }}
         >
-          Generate Visual Tags
+          Proceed to Video ({selectedCount} images)
         </Button>
-        {visuals.length > 0 && (
-          <Button
-            variant="contained"
-            color="secondary"
-            endIcon={<ArrowForward />}
-            onClick={handleProceedToVideo}
-          >
-            Proceed to Video
-          </Button>
-        )}
-      </Box>
+      )}
 
       {error && (
         <Alert severity="error" onClose={() => setError(null)}>
@@ -366,8 +728,285 @@ export default function ImagePage() {
   );
 
   const outputPanel = (
-    <Box>
-      {visuals.length === 0 ? (
+    <Box
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      sx={{
+        minHeight: 200,
+        position: 'relative',
+        border: isDragging ? 2 : 0,
+        borderColor: 'primary.main',
+        borderStyle: 'dashed',
+        borderRadius: 1,
+        bgcolor: isDragging ? 'action.hover' : 'transparent',
+        transition: 'all 0.2s',
+      }}
+    >
+      {/* Drop overlay */}
+      {isDragging && (
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'action.hover',
+            zIndex: 10,
+          }}
+        >
+          <CloudUpload sx={{ fontSize: 48, color: 'primary.main', mb: 1 }} />
+          <Typography color="primary">Drop image here</Typography>
+        </Box>
+      )}
+
+      {/* Uploading/Generating state */}
+      {(isUploading || isGenerating) && (
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: 200,
+          }}
+        >
+          <CircularProgress sx={{ mb: 1 }} />
+          <Typography color="text.secondary">
+            {isGenerating ? 'Generating AI image...' : 'Uploading image...'}
+          </Typography>
+        </Box>
+      )}
+
+      {/* Show selected image for current visual */}
+      {!isUploading && !isGenerating && !isSearching && selectedImage && searchResults.length === 0 && (
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            p: 2,
+          }}
+        >
+          <Box
+            onClick={() => setPreviewOpen(true)}
+            sx={{
+              position: 'relative',
+              maxWidth: 400,
+              maxHeight: 300,
+              border: 3,
+              borderColor: 'success.main',
+              borderRadius: 1,
+              overflow: 'hidden',
+              cursor: 'zoom-in',
+              transition: 'transform 0.2s ease',
+              '&:hover': {
+                transform: 'scale(1.02)',
+              },
+            }}
+          >
+            <img
+              src={selectedImage}
+              alt={currentVisual?.description || 'Selected image'}
+              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+            />
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                bgcolor: 'success.main',
+                borderRadius: '50%',
+                width: 28,
+                height: 28,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Check sx={{ fontSize: 18, color: 'white' }} />
+            </Box>
+          </Box>
+          <Typography variant="body2" color="success.main" sx={{ mt: 1 }}>
+            Image selected for Visual {currentVisual?.number}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+            Click to enlarge • Search again to change
+          </Typography>
+        </Box>
+      )}
+
+      {/* Image preview modal */}
+      <Dialog
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        maxWidth="lg"
+        PaperProps={{
+          sx: {
+            bgcolor: 'transparent',
+            boxShadow: 'none',
+            overflow: 'visible',
+          },
+        }}
+      >
+        <Box sx={{ position: 'relative' }}>
+          <IconButton
+            onClick={() => setPreviewOpen(false)}
+            sx={{
+              position: 'absolute',
+              top: -40,
+              right: 0,
+              color: 'white',
+              bgcolor: 'rgba(0,0,0,0.5)',
+              '&:hover': { bgcolor: 'rgba(0,0,0,0.7)' },
+            }}
+          >
+            <Close />
+          </IconButton>
+          <img
+            src={selectedImage || ''}
+            alt={currentVisual?.description || 'Selected image'}
+            style={{
+              maxWidth: '90vw',
+              maxHeight: '85vh',
+              objectFit: 'contain',
+              borderRadius: 8,
+            }}
+          />
+        </Box>
+      </Dialog>
+
+      {/* Empty state with drag hint */}
+      {!isUploading && !isGenerating && searchResults.length === 0 && !isSearching && visuals.length > 0 && !selectedImage && (
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: 200,
+            color: 'text.secondary',
+          }}
+        >
+          <Typography>Enter keywords and click Search to find images</Typography>
+          <Typography variant="caption" sx={{ mt: 1 }}>
+            or drag & drop an image file here
+          </Typography>
+        </Box>
+      )}
+
+      {!isUploading && !isGenerating && isSearching && (
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: 200,
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      )}
+
+      {!isUploading && !isGenerating && searchResults.length > 0 && (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+            gap: 1,
+          }}
+        >
+          {searchResults.map((option, idx) => (
+            <Tooltip
+              key={idx}
+              arrow
+              placement="top"
+              slotProps={{
+                tooltip: {
+                  sx: { maxWidth: 320, p: 0, bgcolor: 'background.paper', border: 1, borderColor: 'divider' },
+                },
+              }}
+              title={
+                <Box>
+                  <img
+                    src={option.thumb || option.url}
+                    alt={option.title}
+                    style={{ width: '100%', maxHeight: 200, objectFit: 'contain', display: 'block' }}
+                  />
+                  <Box sx={{ p: 1 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, display: 'block', color: 'text.primary' }}>
+                      {option.title}
+                    </Typography>
+                    {option.description && (
+                      <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: 'text.secondary' }}>
+                        {option.description}
+                      </Typography>
+                    )}
+                    <Box sx={{ mt: 0.5 }}>
+                      {option.artist && (
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                          By: {option.artist}
+                        </Typography>
+                      )}
+                      {option.width && option.height && (
+                        <Typography variant="caption" sx={{ color: 'text.disabled' }}>
+                          {option.width}×{option.height} • {option.license || 'Unknown'}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                </Box>
+              }
+            >
+              <Box
+                sx={{
+                  position: 'relative',
+                  aspectRatio: '1',
+                  cursor: 'pointer',
+                  border: 3,
+                  borderColor: selectedImage === option.url ? 'primary.main' : 'transparent',
+                  borderRadius: 1,
+                  overflow: 'hidden',
+                  '&:hover': {
+                    borderColor: selectedImage === option.url ? 'primary.main' : 'action.hover',
+                  },
+                }}
+                onClick={() => handleSelectImage(option.url, option.thumb)}
+              >
+                <img
+                  src={option.thumb || option.url}
+                  alt={option.title}
+                  loading="lazy"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+                {selectedImage === option.url && (
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 4,
+                      right: 4,
+                      bgcolor: 'primary.main',
+                      borderRadius: '50%',
+                      width: 24,
+                      height: 24,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Check sx={{ fontSize: 16, color: 'white' }} />
+                  </Box>
+                )}
+              </Box>
+            </Tooltip>
+          ))}
+        </Box>
+      )}
+
+      {visuals.length === 0 && (
         <Box
           sx={{
             display: 'flex',
@@ -377,140 +1016,9 @@ export default function ImagePage() {
             color: 'text.secondary',
           }}
         >
-          <Typography>
-            Visual tags will appear here. Generate tags to begin sourcing images.
-          </Typography>
-        </Box>
-      ) : (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          {visuals.map((visual) => (
-            <Card key={visual.id} variant="outlined">
-              <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                  <Box>
-                    <Typography variant="subtitle1">
-                      Visual {visual.sequenceNumber}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {visual.description}
-                    </Typography>
-                    <Box sx={{ mt: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                      {visual.keywords.map((kw, i) => (
-                        <Chip key={i} size="small" label={kw} variant="outlined" />
-                      ))}
-                      <Chip
-                        size="small"
-                        label={visual.cameraMovement.replace('_', ' ')}
-                        color="primary"
-                        variant="outlined"
-                      />
-                    </Box>
-                  </Box>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Button
-                      size="small"
-                      startIcon={isSearching && selectedVisual?.id === visual.id ? <CircularProgress size={14} /> : <Search />}
-                      onClick={() => handleSearchWikimedia(visual)}
-                      disabled={isSearching}
-                    >
-                      Wikimedia
-                    </Button>
-                    <Button
-                      size="small"
-                      startIcon={isGeneratingImage && selectedVisual?.id === visual.id ? <CircularProgress size={14} /> : <ImageIcon />}
-                      onClick={() => handleGenerateImage(visual)}
-                      disabled={isGeneratingImage}
-                    >
-                      Generate
-                    </Button>
-                  </Box>
-                </Box>
-
-                {visual.variants.length > 0 && (
-                  <Grid container spacing={1}>
-                    {visual.variants.map((variant) => (
-                      <Grid size={{ xs: 6, sm: 4, md: 3 }} key={variant.id}>
-                        <Card
-                          variant="outlined"
-                          sx={{
-                            position: 'relative',
-                            border: variant.isSelected ? 2 : 1,
-                            borderColor: variant.isSelected ? 'primary.main' : 'divider',
-                          }}
-                        >
-                          <CardMedia
-                            component="img"
-                            height="100"
-                            image={variant.processedUrl || variant.sourceUrl}
-                            sx={{ objectFit: 'cover', cursor: 'pointer' }}
-                            onClick={() => handleSelectVariant(visual.id, variant.id)}
-                          />
-                          <CardActions sx={{ p: 0.5, justifyContent: 'space-between' }}>
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                setSelectedVariant(variant);
-                                setFilterDialogOpen(true);
-                              }}
-                            >
-                              <FilterAlt fontSize="small" />
-                            </IconButton>
-                            {variant.isSelected && <Check color="primary" fontSize="small" />}
-                          </CardActions>
-                          {variant.filters.length > 0 && (
-                            <Box sx={{ position: 'absolute', top: 4, left: 4 }}>
-                              <Chip size="small" label={variant.filters.length} color="primary" />
-                            </Box>
-                          )}
-                        </Card>
-                      </Grid>
-                    ))}
-                  </Grid>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+          <Typography>Auto-tag your script first to begin selecting images</Typography>
         </Box>
       )}
-
-      {/* Filter Dialog */}
-      <Dialog open={filterDialogOpen} onClose={() => setFilterDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Apply Image Filter</DialogTitle>
-        <DialogContent>
-          {selectedVariant && (
-            <Box sx={{ mb: 2 }}>
-              <img
-                src={selectedVariant.processedUrl || selectedVariant.sourceUrl}
-                alt="Preview"
-                style={{ width: '100%', maxHeight: 200, objectFit: 'contain' }}
-              />
-            </Box>
-          )}
-          <Grid container spacing={1}>
-            {imageFilters.map((filter) => (
-              <Grid size={{ xs: 6 }} key={filter.value}>
-                <Button
-                  fullWidth
-                  variant="outlined"
-                  onClick={() => handleApplyFilter(filter.value)}
-                  disabled={isApplyingFilter}
-                  startIcon={isApplyingFilter ? <CircularProgress size={14} /> : null}
-                >
-                  <Box sx={{ textAlign: 'left' }}>
-                    <Typography variant="body2">{filter.label}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {filter.description}
-                    </Typography>
-                  </Box>
-                </Button>
-              </Grid>
-            ))}
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setFilterDialogOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 
@@ -520,8 +1028,8 @@ export default function ImagePage() {
       configPanel={configPanel}
       outputPanel={outputPanel}
       promptTitle="Script (read-only view)"
-      configTitle="Visual Generation"
-      outputTitle="Visual Tags & Images"
+      configTitle="Image Selection"
+      outputTitle={currentVisual ? `Search Results for Visual ${currentVisual.number}` : 'Search Results'}
     />
   );
 }

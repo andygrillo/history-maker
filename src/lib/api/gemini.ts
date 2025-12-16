@@ -1,7 +1,7 @@
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta';
 
-// Image generation models
-const IMAGE_MODEL = 'gemini-2.0-flash-exp'; // Using stable model
+// Image generation models - per CLAUDE.md
+const IMAGE_MODEL = 'gemini-3-pro-image-preview';
 
 // Video generation models
 const VIDEO_MODELS = {
@@ -37,21 +37,57 @@ interface GenerationOperation {
   };
 }
 
+// Build detailed painting prompt for 18th-19th century style
+function buildPaintingPrompt(description: string, aspectRatio?: string): string {
+  const aspectInstructions: Record<string, string> = {
+    '16:9': 'Create a wide landscape format image (16:9 aspect ratio).',
+    '9:16': 'Create a tall portrait format image (9:16 aspect ratio).',
+    '1:1': 'Create a square format image (1:1 aspect ratio).',
+    '4:3': 'Create a standard format image (4:3 aspect ratio).',
+    '3:4': 'Create a portrait format image (3:4 aspect ratio).',
+  };
+
+  return `Create an 18th-19th century oil painting in the style of historical academic art.
+
+Subject: ${description}
+
+Style Guidelines:
+- Classical academic painting technique with visible brushstrokes
+- Rich, warm color palette typical of historical oil paintings
+- Dramatic lighting with strong chiaroscuro effects
+- Period-accurate costumes, architecture, and details
+- Composition following classical rules (golden ratio, rule of thirds)
+- Atmospheric perspective for depth
+- Fine detail in faces and important elements
+
+${aspectRatio && aspectInstructions[aspectRatio] ? aspectInstructions[aspectRatio] : ''}
+
+Generate a single high-quality painting image.
+
+Avoid: modern elements, anachronisms, text, watermarks`;
+}
+
 export async function generateImage(
   apiKey: string,
   prompt: string,
   options: ImageGenerationOptions = {}
 ): Promise<{ imageData: string; mimeType: string }> {
-  const stylePrompts: Record<string, string> = {
-    photorealistic: 'Photorealistic image, high quality photography, natural lighting,',
-    '18th_century_painting': 'Oil painting in 18th century European style, historical painting, classical art style,',
-    '20th_century_modern': 'Modern art style, 20th century illustration, clean lines,',
-    map: 'Historical map style, cartographic illustration, aged paper texture,',
-    document: 'Historical document style, aged parchment, handwritten or printed text,',
-  };
+  let fullPrompt: string;
 
-  const stylePrefix = options.style ? stylePrompts[options.style] : '';
-  const fullPrompt = `${stylePrefix} ${prompt}`;
+  if (options.style === '18th_century_painting') {
+    // Use detailed painting prompt for historical style
+    fullPrompt = buildPaintingPrompt(prompt, options.aspectRatio);
+  } else {
+    // Use simple style prefixes for other styles
+    const stylePrompts: Record<string, string> = {
+      photorealistic: 'Photorealistic image, high quality photography, natural lighting,',
+      '20th_century_modern': 'Modern art style, 20th century illustration, clean lines,',
+      map: 'Historical map style, cartographic illustration, aged paper texture,',
+      document: 'Historical document style, aged parchment, handwritten or printed text,',
+    };
+    const stylePrefix = options.style ? stylePrompts[options.style] || '' : '';
+    fullPrompt = `${stylePrefix} ${prompt}`;
+  }
 
   const response = await fetch(
     `${GEMINI_API_URL}/models/${IMAGE_MODEL}:generateContent?key=${apiKey}`,
