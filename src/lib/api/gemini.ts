@@ -373,6 +373,7 @@ export async function convertToPhoto(
   const prompt = `Convert this painting/artwork into a photorealistic image while maintaining the same composition, subjects, and scene.
 Keep the historical accuracy and period-appropriate details.
 IMPORTANT: Keep the EXACT same aspect ratio and dimensions as the original image.
+Do NOT add any frame, border, text, watermark, or overlay to the image.
 ${options?.instructions ? `Additional instructions: ${options.instructions}` : ''}
 Output a single photorealistic image.`;
 
