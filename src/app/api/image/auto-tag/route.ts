@@ -2,59 +2,58 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createBedrockClient, invokeClaudeModel } from '@/lib/api/bedrock';
 
-const VISUAL_TAGGING_SYSTEM = `You are an expert at adding visual cues to documentary narration scripts.
+const VISUAL_TAGGING_SYSTEM = `You are an expert documentary editor adding visual cues to narration scripts.
 
-Your task is to insert numbered visual markers into the script at natural transition points.
+STEP 1: READ THE ENTIRE SCRIPT FIRST
+Before adding ANY visual markers, read the complete script from start to end to understand:
+- The overall narrative arc and story being told
+- Key people, events, places mentioned throughout
+- How topics connect and flow into each other
+- What comes BEFORE and AFTER each section
 
-CRITICAL: Match visuals to WHAT THE TEXT ACTUALLY DISCUSSES. Do NOT invent dramatic scenes (stormy nights, dramatic skies, etc.) that aren't mentioned in the script.
+This context is CRITICAL for choosing visuals that make sense in the flow.
 
-IMPORTANT RULES:
-1. Keep ALL original text EXACTLY as written - do not modify any words
-2. Only ADD visual markers in this format: (VISUAL X: description | KEYWORD: single_search_term)
-3. ALWAYS start with (VISUAL 1: ...) at the very beginning BEFORE any text - this is the opening image
-4. Place subsequent markers at natural scene transitions, topic changes, or when a new subject is introduced
-5. Number visuals sequentially starting from 1: (VISUAL 1: ...), (VISUAL 2: ...), etc.
-6. Visual descriptions should match the content being discussed:
-   - PREFER portraits, paintings, and historical scenes
-   - For mentions of people: use their portrait
-   - For events/battles: use a depiction of that event
-   - For places: use a painting or illustration of the location
-   - NEVER use maps unless the text EXPLICITLY discusses geography, borders, territories, or locations on a map
-   - Do NOT invent atmospheric/cinematic scenes not in the text
-7. Each visual description should be 10-20 words, factual and searchable
+STEP 2: ADD VISUAL MARKERS
+Insert numbered visual markers at natural transition points.
 
-8. KEYWORD - THIS IS THE MOST IMPORTANT PART:
+FORMAT: (VISUAL X: description | KEYWORD: single_search_term)
 
-You must provide ONE single keyword that will be typed into an image search bar to find this exact image.
+PLACEMENT RULES:
+1. ALWAYS start with (VISUAL 1: ...) at the very beginning BEFORE any text
+2. Place markers at natural scene transitions, topic changes, or new subjects
+3. Number sequentially: (VISUAL 1: ...), (VISUAL 2: ...), etc.
+4. Keep ALL original text EXACTLY as written - only ADD markers
 
-Imagine you are searching Google Images or Wikimedia Commons. What single search term would you type to find this image?
+VISUAL SELECTION - CONTEXT IS KEY:
+- Each visual must fit what is being discussed AT THAT MOMENT
+- Consider what came before AND what comes after
+- For people mentioned: use their portrait
+- For events/battles: use a depiction of that specific event
+- For places: use a painting or illustration of that location
+- NEVER use maps unless text EXPLICITLY discusses geography/borders/territories
+- NEVER invent atmospheric scenes (stormy nights, dramatic skies) not in the text
+- Each description should be 10-20 words, factual and searchable
 
-GOOD KEYWORD EXAMPLES (these work in image search):
-- "Toussaint Louverture" (person's full name - finds portraits)
-- "Battle of Vertières" (specific battle - finds paintings of this battle)
-- "Napoleon Bonaparte" (full name - finds portraits)
-- "Storming of the Bastille" (specific event - finds depictions)
-- "HMS Victory" (specific ship - finds images of this ship)
-- "Versailles Palace" (specific place - finds images)
-- "French Revolution 1789" (event + year for specificity)
+KEYWORD - THE MOST IMPORTANT PART:
+The keyword will be typed into Wikimedia Commons to find this image.
 
-BAD KEYWORD EXAMPLES (too vague for image search):
-- "Caribbean" (too broad - millions of results)
-- "slavery" (abstract concept - no specific image)
-- "colonial" (adjective, not searchable)
-- "revolution" (which one? too generic)
-- "battle scene" (generic, not specific)
-- "historical" (meaningless in search)
-- "map" (never use maps unless text explicitly discusses geography)
+GOOD KEYWORDS (specific, searchable):
+- "Toussaint Louverture" (full name finds portraits)
+- "Battle of Vertières" (specific event finds paintings)
+- "Napoleon Bonaparte" (full name finds portraits)
+- "HMS Victory" (specific ship)
+- "Versailles Palace" (specific place)
 
-RULES:
-- Use ONE keyword only (can be 2-3 words like "Napoleon Bonaparte" or "Battle of Waterloo")
-- The keyword must be something you would actually type into an image search
-- ALWAYS use full proper names for people (first + last name)
+BAD KEYWORDS (too vague):
+- "Caribbean", "slavery", "colonial", "revolution", "battle scene", "historical"
+- Any generic descriptor or adjective
+- Media type words: painting, portrait, engraving, illustration
+
+KEYWORD RULES:
+- Use ONE keyword (can be 2-3 words like "Napoleon Bonaparte")
+- ALWAYS use full proper names for people
 - ALWAYS use specific event names, place names, or proper nouns
-- NEVER use generic descriptors, adjectives, or abstract concepts
-- NEVER use media type words: painting, portrait, engraving, illustration, photograph
-- NEVER suggest maps unless the script explicitly discusses geography or territorial changes`;
+- The keyword must be something you would actually type into an image search`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -103,7 +102,7 @@ Return the complete script with visual markers inserted:`;
 
     const taggedScript = await invokeClaudeModel({
       client,
-      model: 'haiku', // Fast and cost-effective, user can edit keywords if needed
+      model: 'sonnet', // Better quality for understanding context
       messages: [{ role: 'user', content: userPrompt }],
       system: VISUAL_TAGGING_SYSTEM,
       maxTokens: 16384,

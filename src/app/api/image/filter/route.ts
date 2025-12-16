@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { generateImage } from '@/lib/api/gemini';
+import { convertToPhoto } from '@/lib/api/gemini';
 import { uploadToR2, R2Config } from '@/lib/storage/r2';
 
 export async function POST(request: NextRequest) {
@@ -15,13 +15,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { videoId, seriesId, visualNumber, description, style, aspectRatio = '16:9' } = await request.json();
+    const { videoId, seriesId, visualNumber, imageUrl, filterType, instructions } = await request.json();
 
-    if (!videoId || !seriesId || !visualNumber || !description) {
+    if (!videoId || !seriesId || !visualNumber || !imageUrl) {
       return NextResponse.json(
-        { error: 'Missing required fields: videoId, seriesId, visualNumber, description' },
+        { error: 'Missing required fields: videoId, seriesId, visualNumber, imageUrl' },
         { status: 400 }
       );
+    }
+
+    if (filterType !== 'photorealistic') {
+      return NextResponse.json({ error: 'Invalid filter type. Supported: photorealistic' }, { status: 400 });
     }
 
     // Get user settings (API keys and R2 config)
@@ -62,25 +66,29 @@ export async function POST(request: NextRequest) {
       publicUrl: settings.r2_public_url,
     };
 
-    // Generate image with Gemini
-    const styleMap: Record<string, '18th_century_painting' | '20th_century_modern' | 'map' | 'document' | 'photorealistic'> = {
-      '18th_century_painting': '18th_century_painting',
-      '20th_century_modern': '20th_century_modern',
-      'map_style': 'map',
-      'document_style': 'document',
-    };
+    // Download the source image
+    const imageResponse = await fetch(imageUrl);
+    if (!imageResponse.ok) {
+      throw new Error(`Failed to fetch source image: ${imageResponse.statusText}`);
+    }
 
-    const { imageData, mimeType } = await generateImage(geminiApiKey, description, {
-      style: styleMap[style] || '18th_century_painting',
-      aspectRatio: aspectRatio || '16:9',
-    });
+    const imageArrayBuffer = await imageResponse.arrayBuffer();
+    const imageBuffer = Buffer.from(imageArrayBuffer);
+    const imageBase64 = imageBuffer.toString('base64');
+
+    // Determine mime type from response or URL
+    const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
+    const imageMimeType = contentType.split(';')[0].trim();
+
+    // Apply the filter (convert to photorealistic)
+    const { imageData, mimeType } = await convertToPhoto(geminiApiKey, imageBase64, imageMimeType, instructions);
 
     // Convert base64 to buffer
-    const imageBuffer = Buffer.from(imageData, 'base64');
+    const filteredBuffer = Buffer.from(imageData, 'base64');
     const extension = mimeType.includes('png') ? 'png' : 'jpg';
 
-    // Generate unique visual ID
-    const visualId = `visual_${visualNumber}_${Date.now()}`;
+    // Generate unique visual ID with filter suffix
+    const visualId = `visual_${visualNumber}_photo_${Date.now()}`;
 
     // Upload to R2
     const r2Url = await uploadToR2(r2Config, {
@@ -89,12 +97,12 @@ export async function POST(request: NextRequest) {
       videoId,
       assetType: 'images',
       assetId: visualId,
-      data: imageBuffer,
+      data: filteredBuffer,
       contentType: mimeType,
       extension,
     });
 
-    // Save to database
+    // Update database with processed_url
     const { data: scriptData } = await supabase
       .from('scripts')
       .select('id')
@@ -102,28 +110,25 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (scriptData) {
-      // Upsert visual (get or create)
+      // Find the visual for this sequence number
       const { data: visualData } = await supabase
         .from('visuals')
-        .upsert(
-          {
-            script_id: scriptData.id,
-            sequence_number: visualNumber,
-            description,
-          },
-          { onConflict: 'script_id,sequence_number' }
-        )
         .select('id')
+        .eq('script_id', scriptData.id)
+        .eq('sequence_number', visualNumber)
         .single();
 
       if (visualData) {
-        // Insert visual variant with AI flag
-        await supabase.from('visual_variants').insert({
-          visual_id: visualData.id,
-          source_url: r2Url,
-          is_ai_generated: true,
-          is_selected: true,
-        });
+        // Update the selected variant with processed_url
+        await supabase
+          .from('visual_variants')
+          .update({
+            processed_url: r2Url,
+            filters: ['photorealistic'],
+          })
+          .eq('visual_id', visualData.id)
+          .eq('source_url', imageUrl)
+          .eq('is_selected', true);
       }
     }
 
@@ -131,12 +136,12 @@ export async function POST(request: NextRequest) {
       imageUrl: r2Url,
       visualId,
       visualNumber,
-      isAiGenerated: true,
+      filterType,
     });
   } catch (error) {
-    console.error('Image generation error:', error);
+    console.error('Image filter error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to generate image' },
+      { error: error instanceof Error ? error.message : 'Failed to apply filter' },
       { status: 500 }
     );
   }

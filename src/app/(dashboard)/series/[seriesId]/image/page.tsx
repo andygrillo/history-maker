@@ -17,7 +17,7 @@ import {
   Dialog,
   IconButton,
 } from '@mui/material';
-import { AutoAwesome, ArrowForward, ArrowBack, Search, Check, SkipNext, CloudUpload, Brush, Close } from '@mui/icons-material';
+import { AutoAwesome, ArrowForward, ArrowBack, Search, Check, SkipNext, CloudUpload, Brush, Close, CameraAlt } from '@mui/icons-material';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { ZoneLayout } from '@/components/layout/ZoneLayout';
 import { createClient } from '@/lib/supabase/client';
@@ -64,8 +64,10 @@ interface VisualItem {
   number: number;
   description: string;
   keywords: string;
-  selectedUrl?: string;
-  selectedThumb?: string;
+  originalUrl?: string;        // Original image (from Wikimedia, upload, or AI)
+  originalThumb?: string;
+  isAiGenerated?: boolean;     // True if original was AI-generated
+  processedUrl?: string;       // Photorealistic version (after filter applied)
 }
 
 export default function ImagePage() {
@@ -100,6 +102,9 @@ export default function ImagePage() {
   // AI generation state
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiAspectRatio, setAiAspectRatio] = useState<'16:9' | '9:16'>('16:9');
+
+  // Filter state
+  const [isFiltering, setIsFiltering] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -151,7 +156,7 @@ export default function ImagePage() {
   useEffect(() => {
     if (currentVisual) {
       setSearchQuery(currentVisual.keywords);
-      setSelectedImage(currentVisual.selectedUrl || null);
+      setSelectedImage(currentVisual.originalUrl || null);
       setSearchResults([]);
 
       // Scroll to the active visual tag in the script
@@ -261,13 +266,13 @@ export default function ImagePage() {
     }
   };
 
-  // Select an image
+  // Select an image from Wikimedia search
   const handleSelectImage = (url: string, thumb: string) => {
     setSelectedImage(url);
-    // Update the visual with selected image
+    // Update the visual with selected image (from Wikimedia, not AI)
     setVisuals((prev) =>
       prev.map((v, idx) =>
-        idx === currentIndex ? { ...v, selectedUrl: url, selectedThumb: thumb } : v
+        idx === currentIndex ? { ...v, originalUrl: url, originalThumb: thumb, isAiGenerated: false } : v
       )
     );
   };
@@ -292,7 +297,7 @@ export default function ImagePage() {
   const handleSkip = () => {
     setVisuals((prev) =>
       prev.map((v, idx) =>
-        idx === currentIndex ? { ...v, selectedUrl: undefined, selectedThumb: undefined } : v
+        idx === currentIndex ? { ...v, originalUrl: undefined, originalThumb: undefined, isAiGenerated: undefined, processedUrl: undefined } : v
       )
     );
     setSelectedImage(null);
@@ -334,6 +339,7 @@ export default function ImagePage() {
       formData.append('videoId', videoId);
       formData.append('seriesId', seriesId);
       formData.append('visualNumber', currentVisual.number.toString());
+      formData.append('description', currentVisual.description);
 
       const response = await fetch('/api/image/upload', {
         method: 'POST',
@@ -347,11 +353,11 @@ export default function ImagePage() {
 
       const data = await response.json();
 
-      // Set the uploaded image as selected
+      // Set the uploaded image as selected (not AI-generated)
       setSelectedImage(data.imageUrl);
       setVisuals((prev) =>
         prev.map((v, idx) =>
-          idx === currentIndex ? { ...v, selectedUrl: data.imageUrl, selectedThumb: data.imageUrl } : v
+          idx === currentIndex ? { ...v, originalUrl: data.imageUrl, originalThumb: data.imageUrl, isAiGenerated: false } : v
         )
       );
     } catch (err) {
@@ -389,17 +395,57 @@ export default function ImagePage() {
 
       const data = await response.json();
 
-      // Set the generated image as selected
+      // Set the generated image as selected (AI-generated)
       setSelectedImage(data.imageUrl);
       setVisuals((prev) =>
         prev.map((v, idx) =>
-          idx === currentIndex ? { ...v, selectedUrl: data.imageUrl, selectedThumb: data.imageUrl } : v
+          idx === currentIndex ? { ...v, originalUrl: data.imageUrl, originalThumb: data.imageUrl, isAiGenerated: true } : v
         )
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate image');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // Apply photorealistic filter to selected image
+  const handleApplyFilter = async () => {
+    if (!currentVisual || !videoId || !selectedImage) return;
+
+    setIsFiltering(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/image/filter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoId,
+          seriesId,
+          visualNumber: currentVisual.number,
+          imageUrl: selectedImage,
+          filterType: 'photorealistic',
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Filter failed');
+      }
+
+      const data = await response.json();
+
+      // Store the processed (photorealistic) version - original is preserved
+      setVisuals((prev) =>
+        prev.map((v, idx) =>
+          idx === currentIndex ? { ...v, processedUrl: data.imageUrl } : v
+        )
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to apply filter');
+    } finally {
+      setIsFiltering(false);
     }
   };
 
@@ -434,7 +480,7 @@ export default function ImagePage() {
       const description = match[2].trim();
       const visual = visuals.find((v) => v.number === visualNum);
       const isActive = visual && visualNum === currentVisual?.number;
-      const hasImage = visual?.selectedUrl;
+      const hasImage = visual?.originalUrl;
 
       // Color: active = blue, has image = green, no image = grey
       let bgcolor = 'action.selected';
@@ -486,7 +532,7 @@ export default function ImagePage() {
   };
 
   // Counts
-  const selectedCount = visuals.filter((v) => v.selectedUrl).length;
+  const selectedCount = visuals.filter((v) => v.originalUrl).length;
   const totalCount = visuals.length;
 
   const promptPanel = (
@@ -780,62 +826,137 @@ export default function ImagePage() {
         </Box>
       )}
 
-      {/* Show selected image for current visual */}
-      {!isUploading && !isGenerating && !isSearching && selectedImage && searchResults.length === 0 && (
+      {/* Show selected image(s) for current visual */}
+      {!isUploading && !isGenerating && !isFiltering && !isSearching && selectedImage && searchResults.length === 0 && (
+        <Box sx={{ p: 2 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 2,
+              justifyContent: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
+            {/* Original Image */}
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                Original {currentVisual?.isAiGenerated && <Chip size="small" label="AI" sx={{ ml: 0.5, height: 18, fontSize: '0.65rem' }} />}
+              </Typography>
+              <Box
+                onClick={() => setPreviewOpen(true)}
+                sx={{
+                  position: 'relative',
+                  maxWidth: 280,
+                  maxHeight: 200,
+                  border: 2,
+                  borderColor: 'success.main',
+                  borderRadius: 1,
+                  overflow: 'hidden',
+                  cursor: 'zoom-in',
+                  '&:hover': { opacity: 0.9 },
+                }}
+              >
+                <img
+                  src={selectedImage}
+                  alt={currentVisual?.description || 'Original image'}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    top: 4,
+                    right: 4,
+                    bgcolor: 'success.main',
+                    borderRadius: '50%',
+                    width: 20,
+                    height: 20,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Check sx={{ fontSize: 14, color: 'white' }} />
+                </Box>
+              </Box>
+            </Box>
+
+            {/* Processed Image (if exists) */}
+            {currentVisual?.processedUrl && (
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  Photorealistic
+                </Typography>
+                <Box
+                  sx={{
+                    position: 'relative',
+                    maxWidth: 280,
+                    maxHeight: 200,
+                    border: 2,
+                    borderColor: 'info.main',
+                    borderRadius: 1,
+                    overflow: 'hidden',
+                    cursor: 'zoom-in',
+                    '&:hover': { opacity: 0.9 },
+                  }}
+                >
+                  <img
+                    src={currentVisual.processedUrl}
+                    alt="Photorealistic version"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  />
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 4,
+                      right: 4,
+                      bgcolor: 'info.main',
+                      borderRadius: '50%',
+                      width: 20,
+                      height: 20,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <CameraAlt sx={{ fontSize: 12, color: 'white' }} />
+                  </Box>
+                </Box>
+              </Box>
+            )}
+          </Box>
+
+          {/* Filter button */}
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, gap: 1 }}>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<CameraAlt />}
+              onClick={handleApplyFilter}
+              disabled={!selectedImage}
+            >
+              {currentVisual?.processedUrl ? 'Re-convert to Photo' : 'Convert to Photo'}
+            </Button>
+          </Box>
+
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
+            Click image to enlarge • Search again to change
+          </Typography>
+        </Box>
+      )}
+
+      {/* Filtering state */}
+      {isFiltering && (
         <Box
           sx={{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            p: 2,
+            height: 200,
           }}
         >
-          <Box
-            onClick={() => setPreviewOpen(true)}
-            sx={{
-              position: 'relative',
-              maxWidth: 400,
-              maxHeight: 300,
-              border: 3,
-              borderColor: 'success.main',
-              borderRadius: 1,
-              overflow: 'hidden',
-              cursor: 'zoom-in',
-              transition: 'transform 0.2s ease',
-              '&:hover': {
-                transform: 'scale(1.02)',
-              },
-            }}
-          >
-            <img
-              src={selectedImage}
-              alt={currentVisual?.description || 'Selected image'}
-              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-            />
-            <Box
-              sx={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-                bgcolor: 'success.main',
-                borderRadius: '50%',
-                width: 28,
-                height: 28,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Check sx={{ fontSize: 18, color: 'white' }} />
-            </Box>
-          </Box>
-          <Typography variant="body2" color="success.main" sx={{ mt: 1 }}>
-            Image selected for Visual {currentVisual?.number}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-            Click to enlarge • Search again to change
-          </Typography>
+          <CircularProgress sx={{ mb: 1 }} />
+          <Typography color="text.secondary">Converting to photorealistic...</Typography>
         </Box>
       )}
 

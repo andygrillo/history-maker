@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
     const videoId = formData.get('videoId') as string;
     const seriesId = formData.get('seriesId') as string;
     const visualNumber = formData.get('visualNumber') as string;
+    const description = formData.get('description') as string | null;
 
     if (!file || !videoId || !seriesId || !visualNumber) {
       return NextResponse.json(
@@ -81,10 +82,44 @@ export async function POST(request: NextRequest) {
       extension,
     });
 
+    // Save to database
+    const { data: scriptData } = await supabase
+      .from('scripts')
+      .select('id')
+      .eq('video_id', videoId)
+      .single();
+
+    if (scriptData) {
+      // Upsert visual (get or create)
+      const { data: visualData } = await supabase
+        .from('visuals')
+        .upsert(
+          {
+            script_id: scriptData.id,
+            sequence_number: parseInt(visualNumber),
+            description: description || undefined,
+          },
+          { onConflict: 'script_id,sequence_number' }
+        )
+        .select('id')
+        .single();
+
+      if (visualData) {
+        // Insert visual variant - uploaded images are NOT AI-generated
+        await supabase.from('visual_variants').insert({
+          visual_id: visualData.id,
+          source_url: r2Url,
+          is_ai_generated: false,
+          is_selected: true,
+        });
+      }
+    }
+
     return NextResponse.json({
       imageUrl: r2Url,
       visualId,
       visualNumber: parseInt(visualNumber),
+      isAiGenerated: false,
     });
   } catch (error) {
     console.error('Image upload error:', error);

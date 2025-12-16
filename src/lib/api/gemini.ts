@@ -360,3 +360,63 @@ export async function downloadVideo(videoUri: string): Promise<Buffer> {
   const arrayBuffer = await response.arrayBuffer();
   return Buffer.from(arrayBuffer);
 }
+
+export async function convertToPhoto(
+  apiKey: string,
+  imageBase64: string,
+  imageMimeType: string,
+  instructions?: string
+): Promise<{ imageData: string; mimeType: string }> {
+  const prompt = `Convert this painting/artwork into a photorealistic image while maintaining the same composition, subjects, and scene.
+Keep the historical accuracy and period-appropriate details.
+${instructions ? `Additional instructions: ${instructions}` : ''}
+Output a single photorealistic image.`;
+
+  const response = await fetch(
+    `${GEMINI_API_URL}/models/${IMAGE_MODEL}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: prompt },
+              {
+                inlineData: {
+                  mimeType: imageMimeType,
+                  data: imageBase64,
+                },
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          responseModalities: ['TEXT', 'IMAGE'],
+        },
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to convert to photo: ${response.statusText} - ${error}`);
+  }
+
+  const data = await response.json();
+
+  const imagePart = data.candidates?.[0]?.content?.parts?.find(
+    (part: { inlineData?: { data: string; mimeType: string } }) => part.inlineData
+  );
+
+  if (!imagePart?.inlineData) {
+    throw new Error('No photorealistic image generated');
+  }
+
+  return {
+    imageData: imagePart.inlineData.data,
+    mimeType: imagePart.inlineData.mimeType || 'image/png',
+  };
+}
