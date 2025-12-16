@@ -365,11 +365,15 @@ export async function convertToPhoto(
   apiKey: string,
   imageBase64: string,
   imageMimeType: string,
-  instructions?: string
+  options?: {
+    instructions?: string;
+    aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4';
+  }
 ): Promise<{ imageData: string; mimeType: string }> {
   const prompt = `Convert this painting/artwork into a photorealistic image while maintaining the same composition, subjects, and scene.
 Keep the historical accuracy and period-appropriate details.
-${instructions ? `Additional instructions: ${instructions}` : ''}
+IMPORTANT: Keep the EXACT same aspect ratio and dimensions as the original image.
+${options?.instructions ? `Additional instructions: ${options.instructions}` : ''}
 Output a single photorealistic image.`;
 
   const response = await fetch(
@@ -395,6 +399,11 @@ Output a single photorealistic image.`;
         ],
         generationConfig: {
           responseModalities: ['TEXT', 'IMAGE'],
+          ...(options?.aspectRatio && {
+            imageConfig: {
+              aspectRatio: options.aspectRatio,
+            },
+          }),
         },
       }),
     }

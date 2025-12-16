@@ -110,6 +110,7 @@ export default function ImagePage() {
 
   // Image preview modal state
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   // Ref for script container to scroll to active tag
   const scriptContainerRef = useRef<HTMLDivElement>(null);
@@ -843,7 +844,10 @@ export default function ImagePage() {
                 Original {currentVisual?.isAiGenerated && <Chip size="small" label="AI" sx={{ ml: 0.5, height: 18, fontSize: '0.65rem' }} />}
               </Typography>
               <Box
-                onClick={() => setPreviewOpen(true)}
+                onClick={() => {
+                  setPreviewUrl(selectedImage);
+                  setPreviewOpen(true);
+                }}
                 sx={{
                   position: 'relative',
                   maxWidth: 280,
@@ -887,6 +891,10 @@ export default function ImagePage() {
                   Photorealistic
                 </Typography>
                 <Box
+                  onClick={() => {
+                    setPreviewUrl(currentVisual.processedUrl || null);
+                    setPreviewOpen(true);
+                  }}
                   sx={{
                     position: 'relative',
                     maxWidth: 280,
@@ -988,8 +996,8 @@ export default function ImagePage() {
             <Close />
           </IconButton>
           <img
-            src={selectedImage || ''}
-            alt={currentVisual?.description || 'Selected image'}
+            src={previewUrl || ''}
+            alt={currentVisual?.description || 'Preview image'}
             style={{
               maxWidth: '90vw',
               maxHeight: '85vh',

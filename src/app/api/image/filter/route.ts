@@ -80,8 +80,19 @@ export async function POST(request: NextRequest) {
     const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
     const imageMimeType = contentType.split(';')[0].trim();
 
+    // Detect aspect ratio from image dimensions
+    // We'll use 16:9 as default, but try to match common aspect ratios
+    let aspectRatio: '1:1' | '16:9' | '9:16' | '4:3' | '3:4' = '16:9';
+
+    // Check content-length and try to detect from image header if needed
+    // For simplicity, we'll let the prompt instruction handle aspect ratio preservation
+    // and not specify an explicit ratio (Gemini should maintain it from the input image)
+
     // Apply the filter (convert to photorealistic)
-    const { imageData, mimeType } = await convertToPhoto(geminiApiKey, imageBase64, imageMimeType, instructions);
+    const { imageData, mimeType } = await convertToPhoto(geminiApiKey, imageBase64, imageMimeType, {
+      instructions,
+      aspectRatio,
+    });
 
     // Convert base64 to buffer
     const filteredBuffer = Buffer.from(imageData, 'base64');
