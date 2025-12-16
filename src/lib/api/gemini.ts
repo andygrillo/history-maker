@@ -370,12 +370,19 @@ export async function convertToPhoto(
     aspectRatio?: '1:1' | '16:9' | '9:16' | '4:3' | '3:4';
   }
 ): Promise<{ imageData: string; mimeType: string }> {
-  const prompt = `Convert this painting/artwork into a photorealistic image while maintaining the same composition, subjects, and scene.
-Keep the historical accuracy and period-appropriate details.
-IMPORTANT: Keep the EXACT same aspect ratio and dimensions as the original image.
-Do NOT add any frame, border, text, watermark, or overlay to the image.
+  const prompt = `Convert this painting/artwork into a photorealistic image.
+
+CRITICAL REQUIREMENTS:
+- Keep ALL subjects and objects in EXACTLY the same position as the original
+- Maintain the EXACT same composition, framing, and scene layout
+- Do NOT move, resize, or reposition any person, object, or element
+- Keep the EXACT same aspect ratio and dimensions as the original image
+- ABSOLUTELY NO frame, border, text, caption, watermark, or overlay of any kind
+- The image must fill the entire canvas edge-to-edge with no decorative elements
+
+Preserve historical accuracy and period-appropriate details (clothing, architecture, etc).
 ${options?.instructions ? `Additional instructions: ${options.instructions}` : ''}
-Output a single photorealistic image.`;
+Output a single photorealistic image with NO borders or text.`;
 
   const response = await fetch(
     `${GEMINI_API_URL}/models/${IMAGE_MODEL}:generateContent?key=${apiKey}`,

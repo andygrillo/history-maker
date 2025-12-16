@@ -17,7 +17,7 @@ import {
   Dialog,
   IconButton,
 } from '@mui/material';
-import { AutoAwesome, ArrowForward, ArrowBack, Search, Check, SkipNext, CloudUpload, Brush, Close, CameraAlt } from '@mui/icons-material';
+import { AutoAwesome, ArrowForward, ArrowBack, Search, Check, SkipNext, CloudUpload, Brush, Close, CameraAlt, Save } from '@mui/icons-material';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { ZoneLayout } from '@/components/layout/ZoneLayout';
 import { createClient } from '@/lib/supabase/client';
@@ -105,6 +105,10 @@ export default function ImagePage() {
 
   // Filter state
   const [isFiltering, setIsFiltering] = useState(false);
+  const [filterInstructions, setFilterInstructions] = useState('');
+
+  // Save state
+  const [isSaving, setIsSaving] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -158,6 +162,7 @@ export default function ImagePage() {
     if (currentVisual) {
       setSearchQuery(currentVisual.keywords);
       setSelectedImage(currentVisual.originalUrl || null);
+      setFilterInstructions(currentVisual.keywords);
       setSearchResults([]);
 
       // Scroll to the active visual tag in the script
@@ -427,6 +432,7 @@ export default function ImagePage() {
           visualNumber: currentVisual.number,
           imageUrl: selectedImage,
           filterType: 'photorealistic',
+          instructions: filterInstructions || undefined,
         }),
       });
 
@@ -447,6 +453,56 @@ export default function ImagePage() {
       setError(err instanceof Error ? err.message : 'Failed to apply filter');
     } finally {
       setIsFiltering(false);
+    }
+  };
+
+  // Save images to R2 and database
+  const handleSave = async () => {
+    if (!currentVisual || !videoId || !selectedImage) return;
+
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/image/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoId,
+          seriesId,
+          visualNumber: currentVisual.number,
+          originalUrl: selectedImage,
+          processedUrl: currentVisual.processedUrl,
+          isAiGenerated: currentVisual.isAiGenerated || false,
+          description: currentVisual.description,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Save failed');
+      }
+
+      const data = await response.json();
+
+      // Update URLs with R2 URLs
+      setVisuals((prev) =>
+        prev.map((v, idx) =>
+          idx === currentIndex
+            ? {
+                ...v,
+                originalUrl: data.sourceUrl,
+                originalThumb: data.sourceUrl,
+                processedUrl: data.processedUrl || v.processedUrl,
+              }
+            : v
+        )
+      );
+      setSelectedImage(data.sourceUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save images');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -933,17 +989,40 @@ export default function ImagePage() {
             )}
           </Box>
 
-          {/* Filter button */}
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, gap: 1 }}>
-            <Button
+          {/* Filter controls */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: 2, gap: 1 }}>
+            <TextField
+              label="Photo conversion hints (optional)"
+              value={filterInstructions}
+              onChange={(e) => setFilterInstructions(e.target.value)}
               size="small"
-              variant="outlined"
-              startIcon={<CameraAlt />}
-              onClick={handleApplyFilter}
-              disabled={!selectedImage}
-            >
-              {currentVisual?.processedUrl ? 'Re-convert to Photo' : 'Convert to Photo'}
-            </Button>
+              fullWidth
+              sx={{ maxWidth: 400 }}
+              placeholder="e.g., 19th century clothing, soft lighting..."
+            />
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={isFiltering ? <CircularProgress size={14} /> : <CameraAlt />}
+                onClick={handleApplyFilter}
+                disabled={!selectedImage || isFiltering}
+              >
+                {currentVisual?.processedUrl ? 'Re-convert to Photo' : 'Convert to Photo'}
+              </Button>
+              {currentVisual?.processedUrl && (
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="success"
+                  startIcon={isSaving ? <CircularProgress size={14} /> : <Save />}
+                  onClick={handleSave}
+                  disabled={isSaving}
+                >
+                  Save to R2
+                </Button>
+              )}
+            </Box>
           </Box>
 
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
