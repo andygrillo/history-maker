@@ -26,10 +26,13 @@ import {
   Pause,
   Stop,
   AutoAwesome,
-  Refresh,
   Save,
   ArrowForward,
   VolumeUp,
+  Delete,
+  Check,
+  RadioButtonChecked,
+  RadioButtonUnchecked,
 } from '@mui/icons-material';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { ZoneLayout } from '@/components/layout/ZoneLayout';
@@ -49,59 +52,97 @@ export default function AudioPage() {
   const [voices] = useState<Voice[]>(PREMADE_VOICES);
   const [selectedVoice, setSelectedVoice] = useState(PREMADE_VOICES[0]?.voice_id || '');
   const [stability, setStability] = useState(0.5);
+  const [outputFormat, setOutputFormat] = useState('mp3_44100_128');
   const [isGeneratingTags, setIsGeneratingTags] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [timestamps, setTimestamps] = useState<TimestampData[]>([]);
+
+  // Track multiple generated takes
+  interface AudioTake {
+    id: string;
+    audioUrl: string;
+    timestamps: TimestampData[];
+    voiceId: string;
+    voiceName: string;
+    createdAt: Date;
+    saved: boolean;
+    saving: boolean;
+    r2Url?: string;
+  }
+  const [takes, setTakes] = useState<AudioTake[]>([]);
+  const [activeTakeId, setActiveTakeId] = useState<string | null>(null);
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [savedAudios, setSavedAudios] = useState<{ id: string; url: string; createdAt: string }[]>([]);
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
+
+  // Get active take
+  const activeTake = takes.find(t => t.id === activeTakeId);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const previewAudioRef = useRef<HTMLAudioElement>(null);
+  const intentionalPlayRef = useRef(false);
 
-  // Load script and voices on mount
+  // Load script and saved audios on mount
   useEffect(() => {
     async function loadData() {
-      // Load script from database
-      if (videoId) {
-        try {
-          const supabase = createClient();
+      if (!videoId) return;
 
-          // Load script
-          const { data: scriptData } = await supabase
-            .from('scripts')
-            .select('id, generated_script')
-            .eq('video_id', videoId)
-            .single();
+      try {
+        const supabase = createClient();
 
-          if (scriptData) {
-            setScript(scriptData.generated_script || '');
+        // Load script
+        const { data: scriptData } = await supabase
+          .from('scripts')
+          .select('id, generated_script')
+          .eq('video_id', videoId)
+          .single();
 
-            // Load existing audio with tagged text if available
-            const { data: audioData } = await supabase
-              .from('audios')
-              .select('tagged_text')
-              .eq('script_id', scriptData.id)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single();
+        if (scriptData) {
+          setScript(scriptData.generated_script || '');
 
-            if (audioData?.tagged_text) {
-              setTaggedText(audioData.tagged_text);
+          // Load all saved audios for this script
+          const { data: audiosData } = await supabase
+            .from('audios')
+            .select('id, tagged_text, voice_id, r2_url, timestamps, created_at')
+            .eq('script_id', scriptData.id)
+            .order('created_at', { ascending: false });
+
+          if (audiosData && audiosData.length > 0) {
+            // Use tagged text from most recent audio
+            if (audiosData[0].tagged_text) {
+              setTaggedText(audiosData[0].tagged_text);
+            }
+
+            // Convert saved audios to takes
+            const savedTakes: AudioTake[] = audiosData.map((audio) => {
+              const voice = voices.find(v => v.voice_id === audio.voice_id);
+              return {
+                id: audio.id,
+                audioUrl: audio.r2_url,
+                timestamps: audio.timestamps || [],
+                voiceId: audio.voice_id,
+                voiceName: voice?.name || 'Unknown',
+                createdAt: new Date(audio.created_at),
+                saved: true,
+                saving: false,
+                r2Url: audio.r2_url,
+              };
+            });
+
+            setTakes(savedTakes);
+            if (savedTakes.length > 0) {
+              setActiveTakeId(savedTakes[0].id);
             }
           }
-        } catch (err) {
-          console.error('Failed to load script:', err);
         }
+      } catch (err) {
+        console.error('Failed to load data:', err);
       }
-
     }
 
     loadData();
-  }, [videoId]);
+  }, [videoId, voices]);
 
   // Audio time tracking
   useEffect(() => {
@@ -118,7 +159,16 @@ export default function AudioPage() {
       audio.removeEventListener('timeupdate', updateTime);
       audio.removeEventListener('ended', handleEnded);
     };
-  }, [audioUrl]);
+  }, [activeTake?.audioUrl]);
+
+  // Reset playback when switching takes (unless intentionally playing)
+  useEffect(() => {
+    setCurrentTime(0);
+    if (!intentionalPlayRef.current) {
+      setIsPlaying(false);
+    }
+    intentionalPlayRef.current = false;
+  }, [activeTakeId]);
 
   const handleGenerateTags = async () => {
     if (!script.trim()) {
@@ -166,14 +216,28 @@ export default function AudioPage() {
           text: textToGenerate,
           voiceId: selectedVoice,
           stability,
+          outputFormat,
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to generate audio');
-
       const data = await response.json();
-      setAudioUrl(data.audioUrl);
-      setTimestamps(data.timestamps);
+      if (!response.ok) throw new Error(data.error || 'Failed to generate audio');
+
+      // Create new take
+      const voiceData = voices.find(v => v.voice_id === selectedVoice);
+      const newTake: AudioTake = {
+        id: crypto.randomUUID(),
+        audioUrl: data.audioUrl,
+        timestamps: data.timestamps,
+        voiceId: selectedVoice,
+        voiceName: voiceData?.name || 'Unknown',
+        createdAt: new Date(),
+        saved: false,
+        saving: false,
+      };
+
+      setTakes(prev => [newTake, ...prev]);
+      setActiveTakeId(newTake.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate audio');
     } finally {
@@ -181,32 +245,54 @@ export default function AudioPage() {
     }
   };
 
-  const handleSaveAudio = async () => {
-    if (!audioUrl || !videoId) return;
+  const handleSaveTake = async (takeId: string) => {
+    const take = takes.find(t => t.id === takeId);
+    if (!take || !videoId || take.saved) return;
+
+    // Mark as saving
+    setTakes(prev => prev.map(t =>
+      t.id === takeId ? { ...t, saving: true } : t
+    ));
+    setError(null);
 
     try {
+      // Extract base64 from data URL
+      const audioBase64 = take.audioUrl.replace(/^data:audio\/\w+;base64,/, '');
+
       const response = await fetch('/api/audio/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           videoId,
-          audioUrl,
+          audioBase64,
           taggedText,
-          voiceId: selectedVoice,
+          voiceId: take.voiceId,
           stability,
-          timestamps,
+          timestamps: take.timestamps,
+          outputFormat,
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to save audio');
-
       const data = await response.json();
-      setSavedAudios((prev) => [
-        { id: data.id, url: audioUrl, createdAt: new Date().toISOString() },
-        ...prev,
-      ]);
+      if (!response.ok) throw new Error(data.error || 'Failed to save audio');
+
+      // Mark as saved with R2 URL
+      setTakes(prev => prev.map(t =>
+        t.id === takeId ? { ...t, saved: true, saving: false, r2Url: data.url } : t
+      ));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save audio');
+      setTakes(prev => prev.map(t =>
+        t.id === takeId ? { ...t, saving: false } : t
+      ));
+    }
+  };
+
+  const handleDeleteTake = (takeId: string) => {
+    setTakes(prev => prev.filter(t => t.id !== takeId));
+    if (activeTakeId === takeId) {
+      const remaining = takes.filter(t => t.id !== takeId);
+      setActiveTakeId(remaining[0]?.id || null);
     }
   };
 
@@ -243,14 +329,54 @@ export default function AudioPage() {
     }
   };
 
-  // Find current word based on timestamp
-  const getCurrentWordIndex = () => {
-    for (let i = timestamps.length - 1; i >= 0; i--) {
-      if (currentTime >= timestamps[i].startTime) {
-        return i;
+  // Group timestamps into sentences
+  const getSentences = () => {
+    if (!activeTake) return [];
+
+    const sentences: Array<{ text: string; startTime: number; endTime: number }> = [];
+    let currentSentence: string[] = [];
+    let sentenceStart = 0;
+    let sentenceEnd = 0;
+
+    activeTake.timestamps.forEach((ts) => {
+      if (currentSentence.length === 0) {
+        sentenceStart = ts.startTime;
+      }
+      currentSentence.push(ts.text);
+      sentenceEnd = ts.endTime;
+
+      // Check if this is end of sentence
+      if (ts.text === '.' || ts.text === '!' || ts.text === '?') {
+        sentences.push({
+          text: currentSentence.join(' ').replace(/ ([.!?,])/g, '$1'),
+          startTime: sentenceStart,
+          endTime: sentenceEnd,
+        });
+        currentSentence = [];
+      }
+    });
+
+    // Add remaining words as final sentence
+    if (currentSentence.length > 0) {
+      sentences.push({
+        text: currentSentence.join(' '),
+        startTime: sentenceStart,
+        endTime: sentenceEnd,
+      });
+    }
+
+    return sentences;
+  };
+
+  // Find current sentence based on timestamp
+  const getCurrentSentence = () => {
+    const sentences = getSentences();
+    for (let i = sentences.length - 1; i >= 0; i--) {
+      if (currentTime >= sentences[i].startTime) {
+        return sentences[i].text;
       }
     }
-    return -1;
+    return '';
   };
 
   // Tag color mapping
@@ -316,12 +442,33 @@ export default function AudioPage() {
 
   const [isEditingTaggedText, setIsEditingTaggedText] = useState(false);
 
+  // Estimate voiceover time (~150 words per minute for narration)
+  const getEstimatedTime = (text: string) => {
+    // Remove tags and count words
+    const cleanText = text.replace(/\[[^\]]+\]/g, '').replace(/\.\.\./g, ' ');
+    const wordCount = cleanText.split(/\s+/).filter((w) => w.length > 0).length;
+    const minutes = wordCount / 150;
+    if (minutes < 1) {
+      return `~${Math.round(minutes * 60)}s`;
+    }
+    const mins = Math.floor(minutes);
+    const secs = Math.round((minutes - mins) * 60);
+    return `~${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const promptPanel = (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-        <Typography variant="body2" color="text.secondary">
-          Script with Audio Tags
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Script with Audio Tags
+          </Typography>
+          {(taggedText || script) && (
+            <Typography variant="caption" color="text.secondary" sx={{ bgcolor: 'action.hover', px: 0.75, py: 0.25, borderRadius: 1 }}>
+              {getEstimatedTime(taggedText || script)}
+            </Typography>
+          )}
+        </Box>
         <Button
           size="small"
           onClick={() => setIsEditingTaggedText(!isEditingTaggedText)}
@@ -456,37 +603,18 @@ export default function AudioPage() {
           onClick={handleGenerateAudio}
           disabled={isGeneratingAudio || !selectedVoice}
         >
-          Generate Audio
+          {takes.length > 0 ? 'New Take' : 'Generate Audio'}
         </Button>
-        {audioUrl && (
-          <>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<Refresh />}
-              onClick={handleGenerateAudio}
-              disabled={isGeneratingAudio}
-            >
-              Regenerate
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<Save />}
-              onClick={handleSaveAudio}
-            >
-              Save
-            </Button>
-            <Button
-              size="small"
-              variant="contained"
-              color="secondary"
-              endIcon={<ArrowForward />}
-              onClick={handleProceedToImage}
-            >
-              Proceed to Images
-            </Button>
-          </>
+        {takes.length > 0 && (
+          <Button
+            size="small"
+            variant="contained"
+            color="secondary"
+            endIcon={<ArrowForward />}
+            onClick={handleProceedToImage}
+          >
+            Proceed to Images
+          </Button>
         )}
       </Box>
 
@@ -500,22 +628,39 @@ export default function AudioPage() {
           {showAdvanced ? '▼ Hide Advanced' : '▶ Advanced'}
         </Button>
         {showAdvanced && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              Stability:
-            </Typography>
-            <Slider
-              value={stability}
-              onChange={(_, v) => setStability(v as number)}
-              min={0}
-              max={1}
-              step={0.05}
-              valueLabelDisplay="auto"
-              sx={{ width: 120 }}
-            />
-            <Typography variant="caption" color="text.secondary">
-              {stability.toFixed(2)}
-            </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mt: 1, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                Stability:
+              </Typography>
+              <Slider
+                value={stability}
+                onChange={(_, v) => setStability(v as number)}
+                min={0}
+                max={1}
+                step={0.05}
+                valueLabelDisplay="auto"
+                sx={{ width: 100 }}
+              />
+              <Typography variant="caption" color="text.secondary">
+                {stability.toFixed(2)}
+              </Typography>
+            </Box>
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <InputLabel>Format</InputLabel>
+              <Select
+                value={outputFormat}
+                label="Format"
+                onChange={(e) => setOutputFormat(e.target.value)}
+              >
+                <MenuItem value="mp3_44100_128">MP3 128kbps</MenuItem>
+                <MenuItem value="mp3_44100_192">MP3 192kbps</MenuItem>
+                <MenuItem value="pcm_16000">PCM 16kHz</MenuItem>
+                <MenuItem value="pcm_22050">PCM 22kHz</MenuItem>
+                <MenuItem value="pcm_24000">PCM 24kHz</MenuItem>
+                <MenuItem value="pcm_44100">PCM 44kHz</MenuItem>
+              </Select>
+            </FormControl>
           </Box>
         )}
       </Box>
@@ -530,11 +675,9 @@ export default function AudioPage() {
     </Box>
   );
 
-  const currentWordIndex = getCurrentWordIndex();
-
   const outputPanel = (
     <Box>
-      {!audioUrl ? (
+      {takes.length === 0 ? (
         <Box
           sx={{
             display: 'flex',
@@ -550,77 +693,154 @@ export default function AudioPage() {
         </Box>
       ) : (
         <Box>
-          {/* Audio Player */}
-          <Paper sx={{ p: 2, mb: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
-            <IconButton onClick={togglePlayback} color="primary" size="large">
-              {isPlaying ? <Pause /> : <PlayArrow />}
-            </IconButton>
-            <Box sx={{ flex: 1 }}>
-              <Slider
-                value={currentTime}
-                max={audioRef.current?.duration || 100}
-                onChange={(_, v) => {
-                  if (audioRef.current) {
-                    audioRef.current.currentTime = v as number;
-                  }
-                }}
-              />
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              {Math.floor(currentTime / 60)}:{String(Math.floor(currentTime % 60)).padStart(2, '0')}
-            </Typography>
-            <audio ref={audioRef} src={audioUrl} />
-          </Paper>
+          {/* Audio Player - only for unsaved takes (preview mode) */}
+          {activeTake && !activeTake.saved && (
+            <>
+              <Paper sx={{ p: 2, mb: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
+                <IconButton onClick={togglePlayback} color="primary" size="large">
+                  {isPlaying ? <Pause /> : <PlayArrow />}
+                </IconButton>
+                <Box sx={{ flex: 1 }}>
+                  <Slider
+                    value={currentTime}
+                    max={audioRef.current?.duration || 100}
+                    onChange={(_, v) => {
+                      if (audioRef.current) {
+                        audioRef.current.currentTime = v as number;
+                      }
+                    }}
+                  />
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  {Math.floor(currentTime / 60)}:{String(Math.floor(currentTime % 60)).padStart(2, '0')}
+                </Typography>
+              </Paper>
 
-          {/* Synchronized Text Display */}
-          <Paper sx={{ p: 2, maxHeight: 300, overflow: 'auto' }}>
-            <Typography component="div" sx={{ lineHeight: 2 }}>
-              {timestamps.map((ts, index) => (
+              {/* Current Sentence Display */}
+              <Paper
+                sx={{
+                  py: 1,
+                  px: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: 40,
+                  mb: 2,
+                }}
+              >
                 <Typography
-                  key={index}
-                  component="span"
+                  variant="body1"
+                  component="div"
                   sx={{
-                    backgroundColor: index === currentWordIndex ? 'primary.main' : 'transparent',
-                    color: index === currentWordIndex ? 'primary.contrastText' : 'text.primary',
-                    px: 0.5,
-                    borderRadius: 0.5,
-                    transition: 'all 0.1s',
+                    textAlign: 'center',
                   }}
                 >
-                  {ts.text}{' '}
+                  {getCurrentSentence()}
                 </Typography>
-              ))}
-            </Typography>
-          </Paper>
+              </Paper>
+            </>
+          )}
 
-          {/* Saved Audios */}
-          {savedAudios.length > 0 && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="subtitle2" gutterBottom>
-                Saved Audio Files
-              </Typography>
-              <List dense>
-                {savedAudios.map((audio) => (
-                  <ListItem key={audio.id}>
-                    <ListItemText
-                      primary={`Audio ${audio.id.slice(0, 8)}`}
-                      secondary={new Date(audio.createdAt).toLocaleString()}
-                    />
-                    <ListItemSecondaryAction>
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          setAudioUrl(audio.url);
+          {/* Hidden audio element for all playback */}
+          {activeTake && (
+            <audio ref={audioRef} src={activeTake.audioUrl} />
+          )}
+
+          {/* Takes List */}
+          <Typography variant="subtitle2" gutterBottom>
+            Generated Takes
+          </Typography>
+          <List dense>
+            {takes.map((take) => {
+              const isThisTakePlaying = take.id === activeTakeId && isPlaying;
+              return (
+                <ListItem
+                  key={take.id}
+                  sx={{
+                    bgcolor: take.id === activeTakeId ? 'action.selected' : 'transparent',
+                    borderRadius: 1,
+                    mb: 0.5,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  {/* Play/Stop button */}
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    onClick={() => {
+                      if (take.id !== activeTakeId) {
+                        intentionalPlayRef.current = true;
+                        setActiveTakeId(take.id);
+                        setTimeout(() => {
+                          if (audioRef.current) {
+                            audioRef.current.load();
+                            audioRef.current.play();
+                            setIsPlaying(true);
+                          }
+                        }, 100);
+                      } else {
+                        togglePlayback();
+                      }
+                    }}
+                  >
+                    {isThisTakePlaying ? <Stop fontSize="small" /> : <PlayArrow fontSize="small" />}
+                  </IconButton>
+
+                  {/* Voice name and saved status */}
+                  <Box sx={{ minWidth: 100 }}>
+                    <Typography variant="body2">{take.voiceName}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {take.createdAt.toLocaleTimeString()}
+                    </Typography>
+                  </Box>
+
+                  {/* Moving dialogue when playing */}
+                  <Box sx={{ flex: 1, mx: 2, overflow: 'hidden' }}>
+                    {isThisTakePlaying && (
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontStyle: 'italic',
+                          color: 'white',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
                         }}
                       >
-                        <PlayArrow />
+                        {getCurrentSentence()}
+                      </Typography>
+                    )}
+                  </Box>
+
+                  {/* Status chip */}
+                  {take.saved && (
+                    <Chip size="small" label="Saved" color="success" sx={{ height: 20, mr: 1 }} />
+                  )}
+
+                  {/* Action buttons */}
+                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    {!take.saved && (
+                      <IconButton
+                        size="small"
+                        onClick={() => handleSaveTake(take.id)}
+                        disabled={take.saving}
+                        title="Save to R2"
+                      >
+                        {take.saving ? <CircularProgress size={18} /> : <Save fontSize="small" />}
                       </IconButton>
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                ))}
-              </List>
-            </Box>
-          )}
+                    )}
+                    <IconButton
+                      size="small"
+                      onClick={() => handleDeleteTake(take.id)}
+                      title="Remove"
+                    >
+                      <Delete fontSize="small" />
+                    </IconButton>
+                  </Box>
+                </ListItem>
+              );
+            })}
+          </List>
         </Box>
       )}
     </Box>

@@ -127,17 +127,20 @@ export default function SettingsPage() {
 
       const { error } = await supabase
         .from('user_settings')
-        .upsert({
-          user_id: user.id,
-          r2_endpoint: data.r2Endpoint || null,
-          r2_bucket_name: data.r2BucketName || null,
-          r2_access_key: data.r2AccessKey || null,
-          r2_secret_key: data.r2SecretKey || null,
-          r2_public_url: data.r2PublicUrl || null,
-          elevenlabs_api_key: data.elevenLabsApiKey || null,
-          google_gemini_api_key: data.googleGeminiApiKey || null,
-          artlist_api_key: data.artlistApiKey || null,
-        });
+        .upsert(
+          {
+            user_id: user.id,
+            r2_endpoint: data.r2Endpoint || null,
+            r2_bucket_name: data.r2BucketName || null,
+            r2_access_key: data.r2AccessKey || null,
+            r2_secret_key: data.r2SecretKey || null,
+            r2_public_url: data.r2PublicUrl || null,
+            elevenlabs_api_key: data.elevenLabsApiKey || null,
+            google_gemini_api_key: data.googleGeminiApiKey || null,
+            artlist_api_key: data.artlistApiKey || null,
+          },
+          { onConflict: 'user_id' }
+        );
 
       if (error) throw error;
 

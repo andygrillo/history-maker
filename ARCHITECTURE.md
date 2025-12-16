@@ -41,6 +41,10 @@
 | `/planner/generate` | POST | Bulk AI video idea generation |
 | `/planner/generate-single` | POST | Single card regeneration |
 | `/planner/lucky` | POST | Random topic generation |
+| `/script/generate` | POST | AI script generation from source text |
+| `/audio/generate` | POST | ElevenLabs TTS with timestamps |
+| `/audio/generate-tags` | POST | AI emotion/delivery tags for script |
+| `/audio/save` | POST | Save audio to R2 storage |
 | `/r2/test` | POST | R2 storage connection test |
 
 ## Libraries (`/src/lib/`)
@@ -48,8 +52,8 @@
 |------|---------|
 | `api/bedrock.ts` | AWS Bedrock Claude wrapper |
 | `api/gemini.ts` | Google Gemini API wrapper |
-| `api/elevenlabs.ts` | ElevenLabs TTS wrapper |
-| `api/r2.ts` | Cloudflare R2 storage |
+| `api/elevenlabs.ts` | ElevenLabs TTS wrapper (premade voices, timestamps) |
+| `storage/r2.ts` | Cloudflare R2 upload/delete utilities |
 | `supabase/client.ts` | Browser Supabase client |
 | `supabase/server.ts` | Server Supabase client |
 | `prompts/defaults.ts` | Default AI prompt templates |
@@ -95,3 +99,14 @@ totalVideos = weeks × weeklyGoal
 **Platform Split** (1:3 ratio):
 - YouTube long-form: 25% of total
 - Short-form (Shorts/TikTok): 75% of total, split evenly
+
+## R2 Storage Structure
+
+```
+/{user_id}/
+  /series/{series_id}/
+    /videos/{video_id}/
+      /audio/{audio_id}.mp3
+      /images/{visual_id}_{variant_id}.png
+      /clips/{clip_id}.mp4
+```
